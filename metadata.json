@@ -1,0 +1,6 @@
+{
+  "name": "VoxaClub",
+  "description": "Premium Voice Live Chat Room with neon glowing user interface and high-fidelity loading screen",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

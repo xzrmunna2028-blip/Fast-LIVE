@@ -5,6 +5,20 @@
 
 import { useState, useEffect, useRef, FormEvent, ChangeEvent } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { 
+  auth, 
+  db, 
+  googleProvider, 
+  signInWithPopup, 
+  signOut,
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  RecaptchaVerifier,
+  signInWithPhoneNumber
+} from "./lib/firebase";
+import { createAgoraRtcService, createAgoraChatService } from "./lib/agora";
+import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import { onAuthStateChanged } from "firebase/auth";
 import voxaclubLogo from "./assets/images/voxaclub_logo_1784157398686.jpg";
 import loginBg from "./assets/images/login_bg_1784157824235.jpg";
 import voxaclubLoginLogo from "./assets/images/voxaclub_login_logo_1784157809686.jpg";
@@ -57,7 +71,8 @@ import {
   MinusSquare,
   LogOut,
   Maximize2,
-  Minimize2
+  Minimize2,
+  ExternalLink
 } from "lucide-react";
 
 // Participant interface for the live room
@@ -741,7 +756,7 @@ interface UserProfile {
   avatar: string;
   phone?: string;
   email?: string;
-  authProvider: "phone" | "google" | "facebook";
+  authProvider: "phone" | "google" | "facebook" | "email";
   country?: string;
   countryFlag?: string;
   birthday?: string;
@@ -847,29 +862,60 @@ const INVITE_MEMBERS = [
 ];
 
 const COUNTRIES_LIST = [
-  { name: "Bangladesh", flag: "🇧🇩" },
-  { name: "India", flag: "🇮🇳" },
-  { name: "Pakistan", flag: "🇵🇰" },
-  { name: "UAE", flag: "🇦🇪" },
-  { name: "Jordan", flag: "🇯🇴" },
+  { name: "Afghanistan", flag: "🇦🇫" },
+  { name: "Armenia", flag: "🇦🇲" },
+  { name: "Azerbaijan", flag: "🇦🇿" },
   { name: "Bahrain", flag: "🇧🇭" },
-  { name: "Algeria", flag: "🇩🇿" },
-  { name: "Saudi Arabia", flag: "🇸🇦" },
-  { name: "Sudan", flag: "🇸🇩" },
+  { name: "Bangladesh", flag: "🇧🇩" },
+  { name: "Bhutan", flag: "🇧🇹" },
+  { name: "Brunei", flag: "🇧🇳" },
+  { name: "Cambodia", flag: "🇰🇭" },
+  { name: "China", flag: "🇨🇳" },
+  { name: "Cyprus", flag: "🇨🇾" },
+  { name: "Georgia", flag: "🇬🇪" },
+  { name: "India", flag: "🇮🇳" },
+  { name: "Indonesia", flag: "🇮🇩" },
+  { name: "Iran", flag: "🇮🇷" },
   { name: "Iraq", flag: "🇮🇶" },
+  { name: "Israel", flag: "🇮🇱" },
+  { name: "Japan", flag: "🇯🇵" },
+  { name: "Jordan", flag: "🇯🇴" },
+  { name: "Kazakhstan", flag: "🇰🇿" },
   { name: "Kuwait", flag: "🇰🇼" },
-  { name: "Morocco", flag: "🇲🇦" },
-  { name: "Yemen", flag: "🇾🇪" },
-  { name: "Turkey", flag: "🇹🇷" },
+  { name: "Kyrgyzstan", flag: "🇰🇬" },
+  { name: "Laos", flag: "🇱🇦" },
+  { name: "Lebanon", flag: "🇱🇧" },
+  { name: "Malaysia", flag: "🇲🇾" },
+  { name: "Maldives", flag: "🇲🇻" },
+  { name: "Mongolia", flag: "🇲🇳" },
+  { name: "Myanmar", flag: "🇲🇲" },
+  { name: "Nepal", flag: "🇳🇵" },
+  { name: "North Korea", flag: "🇰🇵" },
   { name: "Oman", flag: "🇴🇲" },
+  { name: "Pakistan", flag: "🇵🇰" },
+  { name: "Palestine", flag: "🇵🇸" },
+  { name: "Philippines", flag: "🇵🇭" },
   { name: "Qatar", flag: "🇶🇦" },
-  { name: "Egypt", flag: "🇪🇬" },
-  { name: "Lebanon", flag: "🇱🇧" }
+  { name: "Saudi Arabia", flag: "🇸🇦" },
+  { name: "Singapore", flag: "🇸🇬" },
+  { name: "South Korea", flag: "🇰🇷" },
+  { name: "Sri Lanka", flag: "🇱🇰" },
+  { name: "Syria", flag: "🇸🇾" },
+  { name: "Taiwan", flag: "🇹🇼" },
+  { name: "Tajikistan", flag: "🇹🇯" },
+  { name: "Thailand", flag: "🇹🇭" },
+  { name: "Timor-Leste", flag: "🇹🇱" },
+  { name: "Turkey", flag: "🇹🇷" },
+  { name: "Turkmenistan", flag: "🇹🇲" },
+  { name: "UAE", flag: "🇦🇪" },
+  { name: "Uzbekistan", flag: "🇺🇿" },
+  { name: "Vietnam", flag: "🇻🇳" },
+  { name: "Yemen", flag: "🇾🇪" }
 ];
 
 export default function App() {
   // Navigation & Step Management
-  const [currentStep, setCurrentStep] = useState<"loading" | "login" | "phone-otp" | "register" | "select-country" | "profile-details" | "lobby" | "room">("loading");
+  const [currentStep, setCurrentStep] = useState<"loading" | "login" | "phone-otp" | "register" | "select-country" | "profile-details" | "lobby" | "room" | "email-auth">("loading");
   
   // Lobby state managers (Screenshot 3)
   const [lobbyRooms, setLobbyRooms] = useState<LobbyRoom[]>(() => {
@@ -1141,31 +1187,17 @@ export default function App() {
 
   // Authentication & Agreement States (Screenshot 2)
   const [isAgreed, setIsAgreed] = useState(false);
-  const [authProvider, setAuthProvider] = useState<"phone" | "google" | "facebook" | null>(null);
+  const [authProvider, setAuthProvider] = useState<"phone" | "google" | "facebook" | "email" | null>(null);
   const [loggedInUser, setLoggedInUser] = useState<UserProfile | null>(() => {
     const savedSession = localStorage.getItem("voxaclub_current_user");
     if (savedSession) {
       try {
         return JSON.parse(savedSession);
       } catch (e) {
-        console.error("Failed to parse saved session, returning default", e);
+        console.error("Failed to parse saved session, returning null", e);
       }
     }
-    const defaultUser: UserProfile = {
-      id: "1488500",
-      name: "Md Munna",
-      avatar: "", // empty so it renders matching screenshot circle bg with letter 'M'
-      authProvider: "phone",
-      phone: "+8801712345678",
-      country: "Bangladesh",
-      countryFlag: "🇧🇩",
-      birthday: "1999-10-12",
-      gender: "Male",
-      bio: "Live your life to the fullest 🚀",
-      description: "Hi! I am Md Munna from Bangladesh. I love hosting live voice rooms and chatting with friends!"
-    };
-    localStorage.setItem("voxaclub_current_user", JSON.stringify(defaultUser));
-    return defaultUser;
+    return null;
   });
 
   // Profile Real-Time Edit States
@@ -1208,6 +1240,21 @@ export default function App() {
   const [regBirthday, setRegBirthday] = useState("1996-01-01");
   const [regGender, setRegGender] = useState<"Male" | "Female" | null>(null);
 
+  // Email / Password Authentication States
+  const [emailSignIn, setEmailSignIn] = useState("");
+  const [passwordSignIn, setPasswordSignIn] = useState("");
+  const [emailSignUp, setEmailSignUp] = useState("");
+  const [passwordSignUp, setPasswordSignUp] = useState("");
+  const [nameSignUp, setNameSignUp] = useState("");
+  const [birthdaySignUp, setBirthdaySignUp] = useState("1999-10-12");
+  const [genderSignUp, setGenderSignUp] = useState<"Male" | "Female">("Male");
+  const [countrySignUp, setCountrySignUp] = useState<{ name: string; flag: string } | null>(null);
+  const [emailAuthMode, setEmailAuthMode] = useState<"signin" | "signup">("signin");
+  const [signUpCountrySearchQuery, setSignUpCountrySearchQuery] = useState("");
+  const [showSignUpCountryDropdown, setShowSignUpCountryDropdown] = useState(false);
+  const [unauthorizedDomainError, setUnauthorizedDomainError] = useState<string | null>(null);
+  const [phoneErrorType, setPhoneErrorType] = useState<"too-many-requests" | "billing-not-enabled" | null>(null);
+
   // Audio & Mic States inside Live Room
   const [isMuted, setIsMuted] = useState(true);
   const [isNoiseReductionActive, setIsNoiseReductionActive] = useState(true);
@@ -1239,6 +1286,134 @@ export default function App() {
   const roomFileInputRef = useRef<HTMLInputElement>(null);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const profileImageInputRef = useRef<HTMLInputElement>(null);
+
+  // Agora Services Refs
+  const agoraRtcRef = useRef<any>(null);
+  const agoraChatRef = useRef<any>(null);
+
+  // Agora Real-Time Voice & Chat Integration Lifecycle Hook
+  useEffect(() => {
+    if (!activeRoom) {
+      // Clean up previous room services if we leave
+      if (agoraRtcRef.current) {
+        agoraRtcRef.current.leave().catch((e: any) => console.warn(e));
+        agoraRtcRef.current = null;
+      }
+      if (agoraChatRef.current) {
+        agoraChatRef.current.logout().catch((e: any) => console.warn(e));
+        agoraChatRef.current = null;
+      }
+      return;
+    }
+
+    const roomName = activeRoom.id || "voxa_lobby";
+    const userName = loggedInUser ? loggedInUser.name : "Munna";
+    const userNickname = loggedInUser ? loggedInUser.name : "Munna";
+
+    console.log(`[Agora] Starting services for room: ${roomName}`);
+
+    // Initialize Agora Services client-side
+    const rtcService = createAgoraRtcService();
+    agoraRtcRef.current = rtcService;
+
+    const chatService = createAgoraChatService();
+    agoraChatRef.current = chatService;
+
+    const handleUserPublished = (user: any, mediaType: "audio" | "video") => {
+      console.log(`[Agora] Remote user published audio track: ${user.uid}`);
+      // Add or update participant list to show real speaker in the room
+      setParticipants((prev) => {
+        const exists = prev.some((p) => p.id === `agora-user-${user.uid}`);
+        if (exists) {
+          return prev.map((p) => p.id === `agora-user-${user.uid}` ? { ...p, isSpeaking: true } : p);
+        } else {
+          return [
+            ...prev,
+            {
+              id: `agora-user-${user.uid}`,
+              name: `Speaker ${user.uid}`,
+              role: "Speaker",
+              avatar: DEFAULT_AVATARS[Math.floor(Math.random() * DEFAULT_AVATARS.length)] || "",
+              isMuted: false,
+              isSpeaking: true,
+              volume: 100
+            }
+          ];
+        }
+      });
+    };
+
+    const handleUserUnpublished = (user: any) => {
+      console.log(`[Agora] Remote user unpublished/left: ${user.uid}`);
+      // Remove remote user from active participants list
+      setParticipants((prev) => prev.filter((p) => p.id !== `agora-user-${user.uid}`));
+    };
+
+    // Fetch dynamic secure tokens from Express Server
+    fetch("/api/agora-token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        channelName: roomName,
+        username: userName
+      })
+    })
+    .then((res) => res.json())
+    .then((data) => {
+      if (data.error) {
+        throw new Error(data.error);
+      }
+
+      console.log("[Agora] Successfully retrieved secure tokens from API", data);
+
+      // Join RTC voice channel with server-generated secure token
+      rtcService.join(roomName, data.rtcToken, handleUserPublished, handleUserUnpublished).then(() => {
+        // Publish local mic if user starts unmuted
+        if (!isMuted) {
+          rtcService.publish().catch((err) => {
+            console.error("[Agora] Auto publish mic failed:", err);
+          });
+        }
+      }).catch((err) => {
+        console.error("[Agora] RTC channel join failed:", err);
+      });
+
+      // Login to Agora Chat with server-generated secure token
+      chatService.login(userName, userNickname, data.chatToken, (msg) => {
+        console.log("[Agora] Incoming text message received:", msg);
+        // Append real-time message to room alerts
+        setRoomAlerts((prev) => [
+          ...prev,
+          {
+            id: `agora-chat-${Date.now()}-${Math.random()}`,
+            text: msg.text,
+            type: "chat",
+            user: msg.from
+          }
+        ]);
+      }).then(() => {
+        // Join the chatroom
+        chatService.joinRoom(roomName).catch((err) => {
+          console.error("[Agora] Failed to join Chat room:", err);
+        });
+      }).catch((err) => {
+        console.error("[Agora] Chat login failed:", err);
+      });
+    })
+    .catch((err) => {
+      console.error("[Agora] Failed to retrieve secure tokens from backend Express API:", err);
+    });
+
+    return () => {
+      console.log(`[Agora] Tearing down services for room: ${roomName}`);
+      rtcService.leave().catch((e: any) => console.warn(e));
+      chatService.logout().catch((e: any) => console.warn(e));
+      agoraRtcRef.current = null;
+      agoraChatRef.current = null;
+    };
+  }, [activeRoom]);
 
   // Mock Room Statistics
   const [listenerCount, setListenerCount] = useState(142);
@@ -1319,6 +1494,111 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
+  // 1.5 Firebase Auth Real-Time Observer
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        try {
+          const docRef = doc(db, "users", firebaseUser.uid);
+          const docSnap = await getDoc(docRef);
+          let profile: UserProfile | null = null;
+          
+          if (docSnap.exists()) {
+            const data = docSnap.data();
+            profile = {
+              id: firebaseUser.uid,
+              name: data.name || "Md Munna",
+              avatar: data.avatar || DEFAULT_AVATARS[0],
+              phone: firebaseUser.phoneNumber || data.phone || "",
+              email: firebaseUser.email || data.email || "",
+              authProvider: data.authProvider || "google",
+              country: data.country || "Bangladesh",
+              countryFlag: data.countryFlag || "🇧🇩",
+              birthday: data.birthday || "1999-10-12",
+              gender: data.gender || "Male",
+              bio: data.bio || "Live your life to the fullest 🚀",
+              description: data.description || "Hosting is my passion!",
+              hasTigerCrown: data.hasTigerCrown || false,
+              vipLevel: data.vipLevel || 1,
+            };
+          } else {
+            // Profile doesn't exist in Firestore. If the user is on the loading screen, direct them to select-country step.
+            if (currentStep === "loading") {
+              setRegUsername(firebaseUser.displayName || "Google User");
+              setRegAvatar(firebaseUser.photoURL || DEFAULT_AVATARS[0]);
+              setAuthProvider(firebaseUser.email ? "google" : "phone");
+              setCurrentStep("select-country");
+              return;
+            }
+          }
+
+          if (profile) {
+            setLoggedInUser(profile);
+            localStorage.setItem("voxaclub_current_user", JSON.stringify(profile));
+            setParticipants((prev) =>
+              prev.map((p) =>
+                p.id === "user-current" || p.id === "host-1"
+                  ? { ...p, name: `${profile.name} (You)`, avatar: profile.avatar }
+                  : p
+              )
+            );
+            if (currentStep === "login" || currentStep === "phone-otp" || currentStep === "email-auth") {
+              setCurrentStep("lobby");
+            }
+          }
+        } catch (e) {
+          console.warn("Error checking Firestore profile, using fallback profile:", e);
+          // Fallback profile to prevent user from being stuck
+          const profile: UserProfile = {
+            id: firebaseUser.uid,
+            name: firebaseUser.displayName || "Md Munna",
+            avatar: firebaseUser.photoURL || DEFAULT_AVATARS[0],
+            phone: firebaseUser.phoneNumber || "",
+            email: firebaseUser.email || "",
+            authProvider: firebaseUser.email ? "google" : "phone",
+            country: "Bangladesh",
+            countryFlag: "🇧🇩",
+            birthday: "1999-10-12",
+            gender: "Male",
+            bio: "Live your life to the fullest 🚀",
+            description: "Hosting is my passion!",
+            hasTigerCrown: false,
+            vipLevel: 1,
+          };
+          setLoggedInUser(profile);
+          localStorage.setItem("voxaclub_current_user", JSON.stringify(profile));
+          setParticipants((prev) =>
+            prev.map((p) =>
+              p.id === "user-current" || p.id === "host-1"
+                ? { ...p, name: `${profile.name} (You)`, avatar: profile.avatar }
+                : p
+            )
+          );
+          if (currentStep === "loading" || currentStep === "login" || currentStep === "phone-otp" || currentStep === "email-auth") {
+            setCurrentStep("lobby");
+          }
+        }
+      } else {
+        // Only clear the session if it's not a local demo/bypass phone login session!
+        const savedSession = localStorage.getItem("voxaclub_current_user");
+        if (savedSession) {
+          try {
+            const parsed = JSON.parse(savedSession);
+            if (parsed && parsed.id && String(parsed.id).startsWith("demo-phone-")) {
+              // This is a bypassed local phone session! Keep it intact and don't wipe it out!
+              return;
+            }
+          } catch (e) {
+            // ignore
+          }
+        }
+        setLoggedInUser(null);
+        localStorage.removeItem("voxaclub_current_user");
+      }
+    });
+    return () => unsubscribe();
+  }, [currentStep]);
+
   // Countdown timer for OTP Verification code resend limit
   useEffect(() => {
     if (!otpSent || otpTimer <= 0) return;
@@ -1337,8 +1617,77 @@ export default function App() {
     return () => clearTimeout(timer);
   };
 
+  // Firebase auth error helper to capture unauthorized domain problems elegantly
+  const handleAuthError = (error: any, contextMessage: string) => {
+    console.warn(contextMessage, error);
+    const errCode = error?.code || "";
+    const errMessage = error?.message || "";
+    const errString = error ? String(error) : "";
+    
+    const isUnauthorizedDomain = 
+      errCode === "auth/unauthorized-domain" ||
+      errMessage.includes("unauthorized-domain") ||
+      errString.includes("unauthorized-domain") ||
+      errString.includes("unauthorized domain") ||
+      errMessage.includes("unauthorized domain");
+
+    const isTooManyRequests =
+      errCode === "auth/too-many-requests" ||
+      errMessage.includes("too-many-requests") ||
+      errString.includes("too-many-requests") ||
+      errString.includes("too many requests") ||
+      errMessage.includes("too many requests");
+
+    const isBillingNotEnabled =
+      errCode === "auth/billing-not-enabled" ||
+      errMessage.includes("billing-not-enabled") ||
+      errString.includes("billing-not-enabled") ||
+      errString.includes("billing not enabled") ||
+      errMessage.includes("billing not enabled");
+
+    if (isUnauthorizedDomain) {
+      setUnauthorizedDomainError(window.location.hostname);
+    } else if (isTooManyRequests) {
+      setPhoneErrorType("too-many-requests");
+    } else if (isBillingNotEnabled) {
+      setPhoneErrorType("billing-not-enabled");
+    } else {
+      const displayMsg = errMessage || (typeof error === "string" ? error : error?.message || String(error));
+      triggerToast(`${contextMessage}: ${displayMsg}`, "error");
+    }
+  };
+
+  const bypassPhoneVerification = () => {
+    const formattedPhone = phoneNumber.trim() ? (phoneNumber.startsWith("+") ? phoneNumber : `+880${phoneNumber}`) : "+8801700000000";
+    const profile: UserProfile = {
+      id: "demo-phone-" + Math.floor(Math.random() * 1000000),
+      name: "Voxa Member " + Math.floor(Math.random() * 1000),
+      avatar: DEFAULT_AVATARS[0],
+      phone: formattedPhone,
+      authProvider: "phone",
+      country: "Bangladesh",
+      countryFlag: "🇧🇩",
+      vipLevel: 1,
+      bio: "Enjoying the club! 🎧",
+    };
+    setIsAgreed(true);
+    setLoggedInUser(profile);
+    localStorage.setItem("voxaclub_current_user", JSON.stringify(profile));
+    setParticipants((prev) =>
+      prev.map((p) =>
+        p.id === "user-current" || p.id === "host-1"
+          ? { ...p, name: `${profile.name} (You)`, avatar: profile.avatar }
+          : p
+      )
+    );
+    setPhoneErrorType(null);
+    setCurrentStep("lobby");
+    triggerToast("Bypassed verification & logged in successfully! ✨", "success");
+  };
+
   // 2. Loading Completion Auto-Transition Logic
   useEffect(() => {
+    if (currentStep !== "loading") return;
     if (loadingPercentage === 100 && isReady) {
       const delayTransition = setTimeout(() => {
         if (loggedInUser) {
@@ -1352,7 +1701,7 @@ export default function App() {
       }, 1000);
       return () => clearTimeout(delayTransition);
     }
-  }, [loadingPercentage, isReady, loggedInUser]);
+  }, [loadingPercentage, isReady, loggedInUser, currentStep]);
 
   // Room Duration Timer
   useEffect(() => {
@@ -1511,6 +1860,15 @@ export default function App() {
     const nextMuted = !isMuted;
     setIsMuted(nextMuted);
 
+    // Update Agora RTC publish state dynamically in real-time
+    if (agoraRtcRef.current) {
+      if (nextMuted) {
+        agoraRtcRef.current.unpublish().catch((e: any) => console.warn(e));
+      } else {
+        agoraRtcRef.current.publish().catch((e: any) => console.warn(e));
+      }
+    }
+
     if (!nextMuted && microphonePermission === "prompt") {
       requestMicrophoneAccess();
     } else {
@@ -1611,7 +1969,7 @@ export default function App() {
   // ==========================================
 
   // Validation interceptor for agreements checkbox
-  const handleAuthAttempt = (provider: "phone" | "google" | "facebook") => {
+  const handleAuthAttempt = async (provider: "phone" | "google" | "facebook" | "email") => {
     if (!isAgreed) {
       triggerToast("Please agree to the User Agreement first.", "error");
       return;
@@ -1621,11 +1979,44 @@ export default function App() {
 
     if (provider === "phone") {
       setCurrentStep("phone-otp");
+    } else if (provider === "google") {
+      try {
+        const result = await signInWithPopup(auth, googleProvider);
+        const firebaseUser = result.user;
+        triggerToast("Google authentication successful!", "success");
+
+        // Check Firestore safely
+        let userDocSnap = null;
+        try {
+          const userDocRef = doc(db, "users", firebaseUser.uid);
+          userDocSnap = await getDoc(userDocRef);
+        } catch (err) {
+          console.warn("Firestore profile fetch failed during Google login, falling back to onboarding:", err);
+        }
+
+        if (userDocSnap && userDocSnap.exists()) {
+          const profile = userDocSnap.data() as UserProfile;
+          setLoggedInUser(profile);
+          localStorage.setItem("voxaclub_current_user", JSON.stringify(profile));
+          setCurrentStep("lobby");
+        } else {
+          setRegUsername(firebaseUser.displayName || "Google User");
+          setRegAvatar(firebaseUser.photoURL || DEFAULT_AVATARS[0]);
+          setAuthProvider("google");
+          setCurrentStep("select-country");
+        }
+      } catch (error: any) {
+        handleAuthError(error, "Google Login Error");
+      }
+    } else if (provider === "email") {
+      setCurrentStep("email-auth");
     } else {
-      // Open the elegant mock authentication accounts chooser modal
-      setShowPopupOverlay(true);
+      triggerToast("Facebook Login is currently disabled. Please use Google, Phone, or Email Login.", "error");
     }
   };
+
+  // State to hold Firebase phone verification confirmation
+  const [phoneConfirmationResult, setPhoneConfirmationResult] = useState<any>(null);
 
   // Actions for Phone Number Verification Code
   const handleRequestOtp = (e: FormEvent) => {
@@ -1635,74 +2026,166 @@ export default function App() {
       return;
     }
 
-    // Generate a secure 6-digit verification code mathematically
-    const code = Math.floor(100000 + Math.random() * 900000).toString();
-    setGeneratedOtp(code);
-    setOtpSent(true);
-    setOtpTimer(60);
+    // Initialize recaptcha verifier
+    if (!(window as any).recaptchaVerifier) {
+      try {
+        (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
+          'size': 'invisible',
+          'callback': () => {
+            // solved
+          }
+        });
+      } catch (err: any) {
+        console.error("Recaptcha initialization error:", err);
+        triggerToast("Failed to initialize recaptcha.", "error");
+        return;
+      }
+    }
 
-    // Realistic visual toast delivery matching SMS gateways
-    triggerToast(`OTP Sent to ${phoneNumber}! Use code: ${code}`, "otp", 10000);
+    const appVerifier = (window as any).recaptchaVerifier;
+    const fullPhone = phoneNumber.startsWith("+") ? phoneNumber : `+880${phoneNumber}`;
+
+    signInWithPhoneNumber(auth, fullPhone, appVerifier)
+      .then((confirmation) => {
+        setPhoneConfirmationResult(confirmation);
+        setOtpSent(true);
+        setOtpTimer(60);
+        triggerToast(`Firebase OTP code sent successfully to ${fullPhone}!`, "otp", 10000);
+      })
+      .catch((error) => {
+        handleAuthError(error, "Phone Auth Error");
+      });
   };
 
   // Submits the OTP to verify identity
   const handleVerifyOtp = (e: FormEvent) => {
     e.preventDefault();
-    if (userEnteredOtp !== generatedOtp) {
-      triggerToast("Invalid verification code. Please try again.", "error");
+    if (!userEnteredOtp || userEnteredOtp.length < 6) {
+      triggerToast("Please enter a valid 6-digit verification code.", "error");
       return;
     }
 
-    triggerToast("Phone verification successful!", "success");
+    if (!phoneConfirmationResult) {
+      triggerToast("Please request verification code first.", "error");
+      return;
+    }
 
-    // Fetch existing registered database records
-    const allUsersStr = localStorage.getItem("voxaclub_users");
-    const usersList: UserProfile[] = allUsersStr ? JSON.parse(allUsersStr) : [];
-    
-    const existingUser = usersList.find((u) => u.phone === phoneNumber);
+    phoneConfirmationResult.confirm(userEnteredOtp)
+      .then(async (result: any) => {
+        const firebaseUser = result.user;
+        triggerToast("Phone verification successful!", "success");
 
-    if (existingUser) {
-      // Account exists, log them directly in
-      setLoggedInUser(existingUser);
-      localStorage.setItem("voxaclub_current_user", JSON.stringify(existingUser));
-      
-      // Update participants list immediately
-      setParticipants(prev =>
-        prev.map(p => p.id === "host-1" ? { ...p, name: `${existingUser.name} (You)`, avatar: existingUser.avatar } : p)
-      );
-      
-      setCurrentStep("lobby");
-    } else {
-      // First-time user, route to select-country onboarding
-      setRegUsername("Munna");
-      setCurrentStep("select-country");
+        // Fetch existing Firestore profile safely
+        let userDocSnap = null;
+        try {
+          const userDocRef = doc(db, "users", firebaseUser.uid);
+          userDocSnap = await getDoc(userDocRef);
+        } catch (err) {
+          console.warn("Firestore profile fetch failed during phone verification:", err);
+        }
+
+        if (userDocSnap && userDocSnap.exists()) {
+          const profile = userDocSnap.data() as UserProfile;
+          setLoggedInUser(profile);
+          localStorage.setItem("voxaclub_current_user", JSON.stringify(profile));
+          setParticipants(prev =>
+            prev.map(p => p.id === "host-1" ? { ...p, name: `${profile.name} (You)`, avatar: profile.avatar } : p)
+          );
+          setCurrentStep("lobby");
+        } else {
+          setRegUsername("User_" + firebaseUser.uid.substring(0, 5));
+          setCurrentStep("select-country");
+        }
+      })
+      .catch((error: any) => {
+        handleAuthError(error, "Invalid or expired verification code");
+      });
+  };
+
+  // Real Email/Password Login
+  const handleEmailSignIn = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!emailSignIn.trim() || !passwordSignIn.trim()) {
+      triggerToast("Please enter email and password.", "error");
+      return;
+    }
+    try {
+      const result = await signInWithEmailAndPassword(auth, emailSignIn.trim(), passwordSignUp.trim());
+      const firebaseUser = result.user;
+
+      // Check Firestore safely
+      let userDocSnap = null;
+      try {
+        const userDocRef = doc(db, "users", firebaseUser.uid);
+        userDocSnap = await getDoc(userDocRef);
+      } catch (err) {
+        console.warn("Firestore profile fetch failed during email login, falling back to onboarding:", err);
+      }
+
+      if (userDocSnap && userDocSnap.exists()) {
+        const profile = userDocSnap.data() as UserProfile;
+        setLoggedInUser(profile);
+        localStorage.setItem("voxaclub_current_user", JSON.stringify(profile));
+        triggerToast(`Welcome back, ${profile.name}!`, "success");
+        setCurrentStep("lobby");
+      } else {
+        setRegUsername(firebaseUser.displayName || "Email User");
+        setAuthProvider("email");
+        setCurrentStep("select-country");
+      }
+    } catch (error: any) {
+      handleAuthError(error, "Login Error");
     }
   };
 
-  // Handles Google/Facebook simulated callback validation
-  const handleSocialSelect = (name: string, email: string, avatar: string) => {
-    setShowPopupOverlay(false);
-    
-    const allUsersStr = localStorage.getItem("voxaclub_users");
-    const usersList: UserProfile[] = allUsersStr ? JSON.parse(allUsersStr) : [];
-    
-    const existingUser = usersList.find((u) => u.email === email);
+  // Real Email/Password Sign Up with Name, DOB, Gender, Country
+  const handleEmailSignUp = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!emailSignUp.trim() || !passwordSignUp.trim()) {
+      triggerToast("Please enter email and password.", "error");
+      return;
+    }
+    if (!nameSignUp.trim()) {
+      triggerToast("Please enter your name.", "error");
+      return;
+    }
+    if (!countrySignUp) {
+      triggerToast("Please select your country.", "error");
+      return;
+    }
+    try {
+      const result = await createUserWithEmailAndPassword(auth, emailSignUp.trim(), passwordSignUp.trim());
+      const firebaseUser = result.user;
 
-    if (existingUser) {
-      setLoggedInUser(existingUser);
-      localStorage.setItem("voxaclub_current_user", JSON.stringify(existingUser));
-      
-      setParticipants(prev =>
-         prev.map(p => p.id === "host-1" ? { ...p, name: `${existingUser.name} (You)`, avatar: existingUser.avatar } : p)
-      );
-      
-      triggerToast(`Authenticated successfully via Google!`, "success");
+      const profile: UserProfile = {
+        id: firebaseUser.uid,
+        name: nameSignUp.trim(),
+        avatar: DEFAULT_AVATARS[0],
+        email: firebaseUser.email || emailSignUp.trim(),
+        authProvider: "email",
+        country: countrySignUp.name,
+        countryFlag: countrySignUp.flag,
+        birthday: birthdaySignUp,
+        gender: genderSignUp,
+        bio: "Live your life to the fullest 🚀",
+        description: "Hosting is my passion!",
+        hasTigerCrown: false,
+        vipLevel: 1,
+      };
+
+      // Save user to Firestore safely
+      try {
+        await setDoc(doc(db, "users", firebaseUser.uid), profile);
+      } catch (err) {
+        console.warn("Firestore profile creation failed during email signup, saving locally only:", err);
+      }
+
+      setLoggedInUser(profile);
+      localStorage.setItem("voxaclub_current_user", JSON.stringify(profile));
+      triggerToast("Account created successfully with profile details! ✨", "success");
       setCurrentStep("lobby");
-    } else {
-      // New Social Account registration
-      setRegUsername(name);
-      setRegAvatar(avatar);
-      setCurrentStep("select-country");
+    } catch (error: any) {
+      handleAuthError(error, "Sign Up Error");
     }
   };
 
@@ -1720,7 +2203,7 @@ export default function App() {
     handleCompleteOnboarding(false);
   };
 
-  const handleCompleteOnboarding = (isSkip: boolean) => {
+  const handleCompleteOnboarding = async (isSkip: boolean) => {
     const finalUsername = isSkip ? (regUsername.trim() || `User_${Math.floor(Math.random() * 9000 + 1000)}`) : regUsername.trim();
     if (!isSkip && !finalUsername) {
       triggerToast("Please enter a username.", "error");
@@ -1732,24 +2215,34 @@ export default function App() {
     const finalBirthday = isSkip ? "1996-01-01" : regBirthday;
     const finalGender = isSkip ? "Not Specified" : (regGender || "Not Specified");
 
+    const currentUser = auth.currentUser;
+    const uid = currentUser ? currentUser.uid : "user-" + Date.now();
+
     const newUser: UserProfile = {
-      id: "user-" + Date.now(),
+      id: uid,
       name: finalUsername,
       avatar: finalAvatar,
-      phone: authProvider === "phone" ? phoneNumber : undefined,
-      email: authProvider !== "phone" ? `user-${Date.now()}@voxaclub.com` : undefined,
+      phone: currentUser?.phoneNumber || (authProvider === "phone" ? phoneNumber : undefined),
+      email: currentUser?.email || (authProvider !== "phone" ? currentUser?.email || `user-${uid}@voxaclub.com` : undefined),
       authProvider: authProvider || "phone",
       country: finalCountry,
       countryFlag: finalCountryFlag,
       birthday: finalBirthday,
       gender: finalGender,
+      bio: "Live your life to the fullest 🚀",
+      description: "Hosting is my passion!",
+      hasTigerCrown: false,
+      vipLevel: 1,
     };
 
-    // Save into all registered users database
-    const allUsersStr = localStorage.getItem("voxaclub_users");
-    const usersList: UserProfile[] = allUsersStr ? JSON.parse(allUsersStr) : [];
-    usersList.push(newUser);
-    localStorage.setItem("voxaclub_users", JSON.stringify(usersList));
+    // Save into Firestore
+    if (currentUser) {
+      try {
+        await setDoc(doc(db, "users", uid), newUser);
+      } catch (e: any) {
+        console.warn("Error saving user to Firestore (saved locally instead):", e);
+      }
+    }
 
     // Save active current session
     setLoggedInUser(newUser);
@@ -1789,7 +2282,7 @@ export default function App() {
     triggerToast("Temporary profile photo updated!", "success");
   };
 
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
     if (!editName.trim()) {
       triggerToast("Nickname cannot be empty", "error");
       return;
@@ -1807,6 +2300,15 @@ export default function App() {
     };
     setLoggedInUser(updatedUser);
     localStorage.setItem("voxaclub_current_user", JSON.stringify(updatedUser));
+
+    // Sync to Firestore
+    if (auth.currentUser) {
+      try {
+        await setDoc(doc(db, "users", auth.currentUser.uid), updatedUser, { merge: true });
+      } catch (err) {
+        console.warn("Error saving profile to Firestore (updated locally instead):", err);
+      }
+    }
     
     // Sync participant
     setParticipants(prev =>
@@ -1837,12 +2339,21 @@ export default function App() {
   };
 
   // Handles opening the onboarding gift box and granting the Tiger Crown
-  const handleOpenGiftBox = () => {
+  const handleOpenGiftBox = async () => {
     if (!loggedInUser) return;
     
     const updatedUser = { ...loggedInUser, hasTigerCrown: true };
     setLoggedInUser(updatedUser);
     localStorage.setItem("voxaclub_current_user", JSON.stringify(updatedUser));
+
+    // Sync to Firestore
+    if (auth.currentUser) {
+      try {
+        await setDoc(doc(db, "users", auth.currentUser.uid), { hasTigerCrown: true }, { merge: true });
+      } catch (err) {
+        console.warn("Error saving Tiger Crown to Firestore (claimed locally instead):", err);
+      }
+    }
     
     // Update in the registered users list database
     const allUsersStr = localStorage.getItem("voxaclub_users");
@@ -1864,8 +2375,13 @@ export default function App() {
   };
 
   // Clear session / Log out
-  const handleLogout = () => {
+  const handleLogout = async () => {
     if (confirm("Are you sure you want to sign out?")) {
+      try {
+        await signOut(auth);
+      } catch (e) {
+        console.error("Firebase signout error:", e);
+      }
       localStorage.removeItem("voxaclub_current_user");
       setLoggedInUser(null);
       setPhoneNumber("");
@@ -2225,6 +2741,9 @@ export default function App() {
   return (
     <div className="fixed inset-0 w-full h-screen h-[100dvh] bg-[#0d0614] text-[#f1f1f1] flex flex-col items-center justify-between font-sans overflow-hidden">
       
+      {/* Invisible Recaptcha Container for Firebase Phone OTP */}
+      <div id="recaptcha-container" className="absolute invisible pointer-events-none w-0 h-0"></div>
+
       {/* GLOBAL COSMIC GRADIENTS */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden z-0">
         <div className="absolute top-[20%] left-[50%] -translate-x-[50%] -translate-y-[50%] w-[450px] h-[450px] bg-pink-600/10 rounded-full blur-[120px] animate-pulse [animation-duration:8s]" />
@@ -2483,6 +3002,19 @@ export default function App() {
                 <ChevronRight className="w-4 h-4 opacity-60" />
               </button>
 
+              {/* Email & Password Auth */}
+              <button
+                onClick={() => handleAuthAttempt("email")}
+                className="w-full flex items-center justify-between px-7 py-3.5 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white rounded-full text-xs font-bold tracking-widest uppercase transition-all shadow-[0_6px_20px_rgba(236,72,153,0.35)] cursor-pointer active:scale-98"
+              >
+                {/* Mail Icon */}
+                <div className="w-5 h-5 bg-white rounded-full flex items-center justify-center shadow-sm text-pink-600">
+                  <span className="text-xs font-extrabold font-sans">@</span>
+                </div>
+                <span className="flex-1 text-center">Email & Password</span>
+                <ChevronRight className="w-4 h-4 opacity-60" />
+              </button>
+
             </div>
 
             {/* Custom Agreement at the bottom matching Screenshot 2 */}
@@ -2505,6 +3037,246 @@ export default function App() {
               </p>
             </div>
 
+          </motion.div>
+        )}
+
+        {/* ==========================================
+           2.5 EMAIL & PASSWORD GATEWAY (Real Sign In & Registration with all details)
+           ========================================== */}
+        {currentStep === "email-auth" && (
+          <motion.div
+            key="email-auth-screen"
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: -20 }}
+            className="relative w-full max-w-lg mx-auto flex-1 flex flex-col justify-between py-12 px-6 z-10"
+          >
+            {/* Header Back Button */}
+            <div className="w-full flex items-center justify-between mt-2">
+              <button
+                onClick={() => {
+                  setCurrentStep("login");
+                }}
+                className="flex items-center gap-1 text-xs font-mono font-bold tracking-widest text-violet-400 hover:text-violet-200 transition-all cursor-pointer"
+              >
+                <ArrowLeft className="w-4 h-4 text-pink-400" />
+                <span>BACK TO OPTIONS</span>
+              </button>
+              <div className="text-[10px] font-mono px-3 py-1 bg-pink-500/10 border border-pink-500/20 rounded-full text-pink-400">
+                EMAIL ACCESS
+              </div>
+            </div>
+
+            {/* Central Card with Scroll */}
+            <div className="w-full bg-[#150a22]/90 backdrop-blur-md rounded-3xl border border-[#2d1b42]/80 p-6 shadow-[0_20px_50px_rgba(0,0,0,0.5)] my-auto relative max-h-[80vh] overflow-y-auto custom-scrollbar">
+              
+              {/* Segment Switcher */}
+              <div className="flex bg-[#0c0515] p-1.5 rounded-2xl border border-violet-500/10 mb-6">
+                <button
+                  onClick={() => setEmailAuthMode("signin")}
+                  className={`flex-1 py-2.5 text-xs font-bold tracking-widest uppercase rounded-xl transition-all cursor-pointer ${
+                    emailAuthMode === "signin"
+                      ? "bg-gradient-to-r from-pink-600 to-purple-600 text-white shadow"
+                      : "text-violet-300/60 hover:text-white"
+                  }`}
+                >
+                  Sign In
+                </button>
+                <button
+                  onClick={() => setEmailAuthMode("signup")}
+                  className={`flex-1 py-2.5 text-xs font-bold tracking-widest uppercase rounded-xl transition-all cursor-pointer ${
+                    emailAuthMode === "signup"
+                      ? "bg-gradient-to-r from-pink-600 to-purple-600 text-white shadow"
+                      : "text-violet-300/60 hover:text-white"
+                  }`}
+                >
+                  Create Account
+                </button>
+              </div>
+
+              {emailAuthMode === "signin" ? (
+                /* SIGN IN FORM */
+                <form onSubmit={handleEmailSignIn} className="flex flex-col gap-4">
+                  <h3 className="text-xl font-bold text-white tracking-tight">Sign in to your account</h3>
+                  <p className="text-xs text-violet-300/70 mb-2">Access your rooms, levels, coins, and live profile seamlessly.</p>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-mono text-pink-400 font-bold uppercase tracking-wider">Email Address</label>
+                    <div className="relative">
+                      <input
+                        type="email"
+                        required
+                        value={emailSignIn}
+                        onChange={(e) => setEmailSignIn(e.target.value)}
+                        placeholder="yourname@domain.com"
+                        className="w-full bg-[#0c0515]/80 border border-violet-500/10 focus:border-pink-500/50 rounded-2xl py-3.5 px-5 text-sm text-white focus:outline-none transition-all placeholder-violet-300/20"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-mono text-pink-400 font-bold uppercase tracking-wider">Password</label>
+                    <input
+                      type="password"
+                      required
+                      value={passwordSignIn}
+                      onChange={(e) => setPasswordSignIn(e.target.value)}
+                      placeholder="••••••••"
+                      className="w-full bg-[#0c0515]/80 border border-violet-500/10 focus:border-pink-500/50 rounded-2xl py-3.5 px-5 text-sm text-white focus:outline-none transition-all placeholder-violet-300/20"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full py-4 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white rounded-full text-xs font-bold tracking-widest uppercase transition-all shadow-[0_6px_20px_rgba(236,72,153,0.35)] cursor-pointer mt-4"
+                  >
+                    SIGN IN NOW
+                  </button>
+                </form>
+              ) : (
+                /* SIGN UP FORM WITH ALL MANDATORY DETAILS */
+                <form onSubmit={handleEmailSignUp} className="flex flex-col gap-4">
+                  <h3 className="text-xl font-bold text-white tracking-tight">Create dynamic account</h3>
+                  <p className="text-xs text-violet-300/70 mb-2">Setup your real, secure profile details on the live database.</p>
+
+                  {/* 1. Full Name */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-mono text-pink-400 font-bold uppercase tracking-wider">Full Name</label>
+                    <input
+                      type="text"
+                      required
+                      value={nameSignUp}
+                      onChange={(e) => setNameSignUp(e.target.value)}
+                      placeholder="e.g. Md Munna"
+                      className="w-full bg-[#0c0515]/80 border border-violet-500/10 focus:border-pink-500/50 rounded-2xl py-3.5 px-5 text-sm text-white focus:outline-none transition-all placeholder-violet-300/20"
+                    />
+                  </div>
+
+                  {/* 2. Birthday */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-mono text-pink-400 font-bold uppercase tracking-wider">Date of Birth</label>
+                    <input
+                      type="date"
+                      required
+                      value={birthdaySignUp}
+                      onChange={(e) => setBirthdaySignUp(e.target.value)}
+                      className="w-full bg-[#0c0515]/80 border border-violet-500/10 focus:border-pink-500/50 rounded-2xl py-3.5 px-5 text-sm text-white focus:outline-none transition-all"
+                    />
+                  </div>
+
+                  {/* 3. Gender */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-mono text-pink-400 font-bold uppercase tracking-wider">Gender</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setGenderSignUp("Male")}
+                        className={`py-3 rounded-2xl font-bold text-xs tracking-wider transition-all border cursor-pointer ${
+                          genderSignUp === "Male"
+                            ? "bg-pink-500/20 border-pink-500 text-pink-300 shadow"
+                            : "bg-[#0c0515]/80 border-violet-500/10 text-violet-300/60 hover:text-white"
+                        }`}
+                      >
+                        MALE
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setGenderSignUp("Female")}
+                        className={`py-3 rounded-2xl font-bold text-xs tracking-wider transition-all border cursor-pointer ${
+                          genderSignUp === "Female"
+                            ? "bg-pink-500/20 border-pink-500 text-pink-300 shadow"
+                            : "bg-[#0c0515]/80 border-violet-500/10 text-violet-300/60 hover:text-white"
+                        }`}
+                      >
+                        FEMALE
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 4. Country Selection with Flag & Search */}
+                  <div className="flex flex-col gap-1.5 relative">
+                    <label className="text-[10px] font-mono text-pink-400 font-bold uppercase tracking-wider">Country (Asia)</label>
+                    
+                    <div
+                      onClick={() => setShowSignUpCountryDropdown(!showSignUpCountryDropdown)}
+                      className="w-full bg-[#0c0515]/80 border border-violet-500/10 hover:border-pink-500/35 rounded-2xl py-3.5 px-5 text-sm text-white cursor-pointer transition-all flex items-center justify-between"
+                    >
+                      {countrySignUp ? (
+                        <div className="flex items-center gap-2.5">
+                          <span className="text-xl">{countrySignUp.flag}</span>
+                          <span className="font-semibold">{countrySignUp.name}</span>
+                        </div>
+                      ) : (
+                        <span className="text-violet-300/30">Choose country...</span>
+                      )}
+                      <Globe className="w-4 h-4 text-pink-400 opacity-80" />
+                    </div>
+
+                    {showSignUpCountryDropdown && (
+                      <div className="absolute top-[100%] left-0 right-0 z-50 bg-[#16082b] border border-violet-500/20 rounded-2xl mt-2 p-3 shadow-2xl max-h-[180px] overflow-y-auto custom-scrollbar flex flex-col gap-1.5">
+                        <input
+                          type="text"
+                          placeholder="Search Asian country..."
+                          value={signUpCountrySearchQuery}
+                          onChange={(e) => setSignUpCountrySearchQuery(e.target.value)}
+                          className="w-full bg-[#0c0515] border border-violet-500/10 focus:border-pink-500/40 rounded-xl py-2 px-3 text-xs text-white focus:outline-none mb-2"
+                        />
+                        {COUNTRIES_LIST.filter(c => c.name.toLowerCase().includes(signUpCountrySearchQuery.toLowerCase())).map((c, i) => (
+                          <div
+                            key={i}
+                            onClick={() => {
+                              setCountrySignUp(c);
+                              setShowSignUpCountryDropdown(false);
+                              setSignUpCountrySearchQuery("");
+                            }}
+                            className="flex items-center gap-3 px-3 py-2 hover:bg-pink-500/10 rounded-xl cursor-pointer transition-all"
+                          >
+                            <span className="text-lg">{c.flag}</span>
+                            <span className="text-xs text-violet-100">{c.name}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 5. Email Address */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-mono text-pink-400 font-bold uppercase tracking-wider">Email Address</label>
+                    <input
+                      type="email"
+                      required
+                      value={emailSignUp}
+                      onChange={(e) => setEmailSignUp(e.target.value)}
+                      placeholder="yourname@domain.com"
+                      className="w-full bg-[#0c0515]/80 border border-violet-500/10 focus:border-pink-500/50 rounded-2xl py-3.5 px-5 text-sm text-white focus:outline-none transition-all placeholder-violet-300/20"
+                    />
+                  </div>
+
+                  {/* 6. Password */}
+                  <div className="flex flex-col gap-1.5">
+                    <label className="text-[10px] font-mono text-pink-400 font-bold uppercase tracking-wider">Password</label>
+                    <input
+                      type="password"
+                      required
+                      value={passwordSignUp}
+                      onChange={(e) => setPasswordSignUp(e.target.value)}
+                      placeholder="Minimum 6 characters"
+                      className="w-full bg-[#0c0515]/80 border border-violet-500/10 focus:border-pink-500/50 rounded-2xl py-3.5 px-5 text-sm text-white focus:outline-none transition-all placeholder-violet-300/20"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    className="w-full py-4 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white rounded-full text-xs font-bold tracking-widest uppercase transition-all shadow-[0_6px_20px_rgba(236,72,153,0.35)] cursor-pointer mt-4"
+                  >
+                    REGISTER & START
+                  </button>
+                </form>
+              )}
+            </div>
+
+            {/* Bottom spacer to align Back button */}
+            <div className="h-4" />
           </motion.div>
         )}
 
@@ -5939,11 +6711,21 @@ export default function App() {
                   <form
                     onSubmit={(e) => {
                       e.preventDefault();
-                      if (!chatMessage.trim()) return;
+                      const text = chatMessage.trim();
+                      if (!text) return;
                       const uName = loggedInUser ? loggedInUser.name : "Munna";
+
+                      // Dispatch via real-time Agora Chat connection
+                      if (agoraChatRef.current && activeRoom) {
+                        const roomName = activeRoom.id || "voxa_lobby";
+                        agoraChatRef.current.sendMessage(roomName, text).catch((err: any) => {
+                          console.error("[Agora] Send message failed:", err);
+                        });
+                      }
+
                       setRoomAlerts(prev => [
                         ...prev,
-                        { id: `chat-${Date.now()}-${Math.random()}`, text: chatMessage.trim(), type: "chat", user: uName }
+                        { id: `chat-${Date.now()}-${Math.random()}`, text: text, type: "chat", user: uName }
                       ]);
                       setChatMessage("");
                     }}
@@ -6212,139 +6994,6 @@ export default function App() {
           </motion.div>
         )}
 
-      </AnimatePresence>
-
-      {/* INTERACTIVE OAUTH POPUP ACCOUNT CHOOSER (Real Google/Facebook Login Simulator) */}
-      <AnimatePresence>
-        {showPopupOverlay && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            {/* Dark background overlay */}
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowPopupOverlay(false)}
-              className="absolute inset-0 bg-black/85 backdrop-blur-sm"
-            />
-
-            {/* Simulated Authenticator Window */}
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 30 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-sm bg-[#180929] border border-violet-800/60 rounded-3xl p-6 shadow-[0_25px_50px_rgba(0,0,0,0.8)] overflow-hidden"
-            >
-              <div className="absolute top-0 inset-x-0 h-1 bg-gradient-to-r from-pink-500 via-purple-600 to-indigo-600" />
-              
-              <div className="flex justify-between items-center mb-6">
-                <div className="flex items-center gap-1 text-pink-400 font-mono text-[9px] uppercase font-bold tracking-widest">
-                  <ShieldCheck className="w-3.5 h-3.5 animate-pulse" />
-                  <span>Secure OAuth Channel</span>
-                </div>
-                <button
-                  onClick={() => setShowPopupOverlay(false)}
-                  className="p-1.5 rounded-lg bg-violet-950/40 border border-violet-800/30 hover:bg-violet-900/40 text-violet-300 cursor-pointer"
-                >
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-
-              <h4 className="text-lg font-black tracking-tight mb-2">
-                Sign in with {authProvider === "google" ? "Google" : "Facebook"}
-              </h4>
-              <p className="text-xs text-violet-300 leading-relaxed mb-6">
-                Choose an account from your device browser cache to securely connect to VoxaClub Party:
-              </p>
-
-              {authProvider === "google" ? (
-                /* Google Accounts list */
-                <div className="space-y-3">
-                  <button
-                    onClick={() => handleSocialSelect("Munna Hossain", "munna.vox@gmail.com", DEFAULT_AVATARS[1])}
-                    className="w-full flex items-center gap-3 p-3 bg-[#231238] hover:bg-[#2e1948] rounded-2xl border border-violet-900 text-left transition-all cursor-pointer group"
-                  >
-                    <img
-                      src={DEFAULT_AVATARS[1]}
-                      alt="Munna"
-                      className="w-9 h-9 rounded-full object-cover border border-violet-800"
-                      referrerPolicy="no-referrer"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold text-white group-hover:text-pink-400 transition-colors">Munna Hossain</p>
-                      <p className="text-[10px] text-violet-400 truncate">munna.vox@gmail.com</p>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-violet-500 shrink-0" />
-                  </button>
-
-                  <button
-                    onClick={() => handleSocialSelect("Sajid_Aman", "sajid.aman@gmail.com", DEFAULT_AVATARS[3])}
-                    className="w-full flex items-center gap-3 p-3 bg-[#231238] hover:bg-[#2e1948] rounded-2xl border border-violet-900 text-left transition-all cursor-pointer group"
-                  >
-                    <img
-                      src={DEFAULT_AVATARS[3]}
-                      alt="Sajid"
-                      className="w-9 h-9 rounded-full object-cover border border-violet-800"
-                      referrerPolicy="no-referrer"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold text-white group-hover:text-pink-400 transition-colors">Sajid Aman</p>
-                      <p className="text-[10px] text-violet-400 truncate">sajid.aman@gmail.com</p>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-violet-500 shrink-0" />
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      const customName = prompt("Enter custom Google Account Name:");
-                      if (customName) {
-                        handleSocialSelect(customName, `${customName.toLowerCase().replace(/\s+/g, '')}@gmail.com`, DEFAULT_AVATARS[0]);
-                      }
-                    }}
-                    className="w-full flex items-center justify-center p-3.5 bg-violet-950/20 hover:bg-violet-900/30 border border-dashed border-violet-800 rounded-2xl text-xs font-bold text-violet-400 transition-all cursor-pointer"
-                  >
-                    + Use another Google account
-                  </button>
-                </div>
-              ) : (
-                /* Facebook Accounts list */
-                <div className="space-y-3">
-                  <button
-                    onClick={() => handleSocialSelect("Munna Hossain", "fb-munna-99@facebook.com", DEFAULT_AVATARS[1])}
-                    className="w-full flex items-center gap-3 p-3 bg-[#231238] hover:bg-[#2e1948] rounded-2xl border border-violet-900 text-left transition-all cursor-pointer group"
-                  >
-                    <img
-                      src={DEFAULT_AVATARS[1]}
-                      alt="Munna"
-                      className="w-9 h-9 rounded-full object-cover border border-violet-800"
-                      referrerPolicy="no-referrer"
-                    />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-xs font-bold text-white group-hover:text-pink-400 transition-colors">Munna Hossain (FB)</p>
-                      <p className="text-[10px] text-violet-400 truncate">Connected via Facebook</p>
-                    </div>
-                    <ChevronRight className="w-4 h-4 text-violet-500 shrink-0" />
-                  </button>
-
-                  <button
-                    onClick={() => {
-                      const customName = prompt("Enter your Facebook Name:");
-                      if (customName) {
-                        handleSocialSelect(customName, `fb-${customName.toLowerCase().replace(/\s+/g, '')}@facebook.com`, DEFAULT_AVATARS[4]);
-                      }
-                    }}
-                    className="w-full flex items-center justify-center p-3.5 bg-violet-950/20 hover:bg-violet-900/30 border border-dashed border-violet-800 rounded-2xl text-xs font-bold text-violet-400 transition-all cursor-pointer"
-                  >
-                    + Log in to another Facebook account
-                  </button>
-                </div>
-              )}
-
-              <p className="text-[9px] text-center text-violet-400/40 font-mono mt-6 select-none">
-                OAuth authentication services verified by Google Cloud Security Node
-              </p>
-            </motion.div>
-          </div>
-        )}
       </AnimatePresence>
 
       {/* FLOATING EMOJIS LAYER */}
@@ -6851,6 +7500,215 @@ export default function App() {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* FIREBASE UNAUTHORIZED DOMAIN ERROR MODAL */}
+      <AnimatePresence>
+        {unauthorizedDomainError && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative w-full max-w-lg bg-gradient-to-b from-[#1c0d2b] to-[#0c0415] border border-red-500/30 rounded-[32px] p-6 text-white shadow-[0_20px_50px_rgba(0,0,0,0.8)] overflow-hidden"
+            >
+              <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-red-500 via-pink-600 to-purple-600" />
+              
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={() => setUnauthorizedDomainError(null)}
+                className="absolute top-4 right-4 p-2 bg-white/5 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="flex items-start gap-4 mt-2">
+                <div className="w-12 h-12 rounded-2xl bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0 text-red-500">
+                  <ShieldCheck className="w-6 h-6 animate-pulse" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-lg font-black text-white tracking-wide uppercase">
+                    Firebase Setup Required
+                  </h3>
+                  <p className="text-xs text-red-400 font-mono font-bold uppercase tracking-wider">
+                    auth/unauthorized-domain Error Detected
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 space-y-4 text-xs text-violet-200/90 leading-relaxed">
+                <p>
+                  আপনার ফায়ারবেস প্রজেক্টে (<strong>voxelive-1da19</strong>) এই ডোমেইনটি অথরাইজড করা নেই। নিচে দেওয়া ডোমেইনগুলো আপনার ফায়ারবেস কনসোলে যুক্ত করুন:
+                </p>
+
+                {/* Hostname list to copy */}
+                <div className="space-y-2">
+                  <div className="bg-black/40 border border-violet-500/15 rounded-2xl p-4 space-y-3">
+                    <div className="flex flex-col gap-1.5">
+                      <span className="text-[10px] font-mono text-pink-400 uppercase tracking-widest font-black">
+                        Current Live App Domain (অবশ্যই যুক্ত করুন)
+                      </span>
+                      <div className="flex items-center justify-between gap-2 bg-[#0c0515] px-3.5 py-2.5 rounded-xl border border-violet-500/10">
+                        <span className="font-mono text-xs text-white break-all font-bold">
+                          {unauthorizedDomainError}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(unauthorizedDomainError);
+                            triggerToast("Domain name copied to clipboard!", "success");
+                          }}
+                          className="px-3 py-1.5 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white rounded-lg text-[10px] font-extrabold tracking-widest uppercase transition-all shrink-0 cursor-pointer active:scale-95"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <span className="text-[10px] font-mono text-pink-400 uppercase tracking-widest font-black">
+                        Preview App Domain (প্রিভিউ এর জন্য)
+                      </span>
+                      <div className="flex items-center justify-between gap-2 bg-[#0c0515] px-3.5 py-2.5 rounded-xl border border-violet-500/10">
+                        <span className="font-mono text-xs text-white break-all font-bold flex-1">
+                          ais-pre-gcxtpl6d3cyhegqxfukjfa-929407129747.asia-southeast1.run.app
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText("ais-pre-gcxtpl6d3cyhegqxfukjfa-929407129747.asia-southeast1.run.app");
+                            triggerToast("Preview domain copied!", "success");
+                          }}
+                          className="px-3 py-1.5 bg-gradient-to-r from-pink-600 to-purple-600 hover:from-pink-500 hover:to-purple-500 text-white rounded-lg text-[10px] font-extrabold tracking-widest uppercase transition-all shrink-0 cursor-pointer active:scale-95"
+                        >
+                          Copy
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="space-y-2 bg-[#ff5252]/5 border border-red-500/10 rounded-2xl p-4">
+                  <h4 className="font-black text-white text-xs uppercase tracking-wider flex items-center gap-1.5">
+                    <span>🛠️</span> কিভাবে সমাধান করবেন (How to Fix):
+                  </h4>
+                  <ol className="list-decimal list-inside space-y-2 text-violet-300 text-[11px] leading-relaxed">
+                    <li>
+                      প্রথমে আপনার <a href="https://console.firebase.google.com/" target="_blank" rel="noreferrer" className="text-pink-400 font-extrabold hover:underline">Firebase Console</a> এ যান এবং প্রজেক্ট সিলেক্ট করুন।
+                    </li>
+                    <li>
+                      বাম পাশের মেনু থেকে <strong>Authentication</strong> এ গিয়ে <strong>Settings</strong> ট্যাবে ক্লিক করুন।
+                    </li>
+                    <li>
+                      সেখান থেকে <strong>Authorized Domains</strong> অপশনে যান এবং <strong>"Add domain"</strong> এ ক্লিক করুন।
+                    </li>
+                    <li>
+                      উপরে কপি করা ডোমেইনগুলো পেস্ট করে <strong>Add</strong> বাটনে ক্লিক করে সেভ করুন।
+                    </li>
+                  </ol>
+                </div>
+              </div>
+
+              <div className="mt-6 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setUnauthorizedDomainError(null)}
+                  className="flex-1 py-3.5 bg-[#0c0515]/80 hover:bg-[#120820] text-violet-300 hover:text-white rounded-2xl text-xs font-bold tracking-widest uppercase transition-all border border-violet-500/10 cursor-pointer text-center"
+                >
+                  Close & Dismiss
+                </button>
+                <a
+                  href="https://console.firebase.google.com/"
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex-1 py-3.5 bg-gradient-to-r from-pink-600 to-purple-600 hover:brightness-110 text-white rounded-2xl text-xs font-bold tracking-widest uppercase transition-all text-center flex items-center justify-center gap-1 shadow-[0_4px_15px_rgba(236,72,153,0.3)] cursor-pointer font-bold"
+                >
+                  <span>Open Console</span>
+                  <ExternalLink className="w-3.5 h-3.5" />
+                </a>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* FIREBASE PHONE ERROR BYPASS MODAL */}
+      <AnimatePresence>
+        {phoneErrorType && (
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-black/85 backdrop-blur-md">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.9, opacity: 0, y: 20 }}
+              className="relative w-full max-w-lg bg-gradient-to-b from-[#1c0d2b] to-[#0c0415] border border-violet-500/30 rounded-[32px] p-6 text-white shadow-[0_20px_50px_rgba(0,0,0,0.8)] overflow-hidden"
+            >
+              <div className="absolute top-0 inset-x-0 h-1.5 bg-gradient-to-r from-pink-500 via-fuchsia-500 to-violet-600" />
+              
+              {/* Close Button */}
+              <button
+                type="button"
+                onClick={() => setPhoneErrorType(null)}
+                className="absolute top-4 right-4 p-2 bg-white/5 hover:bg-white/10 rounded-full text-slate-400 hover:text-white transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+
+              <div className="flex items-start gap-4 mt-2">
+                <div className="w-12 h-12 rounded-2xl bg-pink-500/10 border border-pink-500/20 flex items-center justify-center shrink-0 text-pink-500">
+                  <Smartphone className="w-6 h-6 animate-pulse" />
+                </div>
+                <div className="space-y-1">
+                  <h3 className="text-lg font-black text-white tracking-wide uppercase">
+                    {phoneErrorType === "billing-not-enabled" ? "Billing Not Enabled" : "SMS Limit Exceeded"}
+                  </h3>
+                  <p className="text-xs text-pink-400 font-mono font-bold uppercase tracking-wider">
+                    {phoneErrorType === "billing-not-enabled" ? "auth/billing-not-enabled Error" : "auth/too-many-requests Error"}
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 space-y-4 text-xs text-violet-200/90 leading-relaxed">
+                <p>
+                  {phoneErrorType === "billing-not-enabled" ? (
+                    "আপনার ফায়ারবেস প্রজেক্টে বিলিং (Blaze plan) অথবা ফোন ভেরিফিকেশন ওটিপি কোটা অ্যাক্টিভ না থাকায় ওটিপি পাঠানো সম্ভব হচ্ছে না।"
+                  ) : (
+                    "অতিরিক্ত ওটিপি (OTP) রিকোয়েস্ট করার কারণে ফায়ারবেস থেকে সাময়িকভাবে এই নাম্বারে বা আইপিতে ওটিপি পাঠানো ব্লক করা হয়েছে।"
+                  )}
+                </p>
+                
+                <p className="font-medium text-pink-300">
+                  চিন্তার কিছু নেই! আপনি ফায়ারবেস ভেরিফিকেশন স্কিপ করে সরাসরি ডেমো অ্যাকাউন্ট দিয়ে অ্যাপে প্রবেশ করতে পারবেন:
+                </p>
+
+                <div className="bg-[#10071c]/80 border border-violet-500/20 rounded-2xl p-4 flex flex-col items-center gap-3">
+                  <span className="text-[10px] font-mono text-violet-400 uppercase tracking-widest font-black text-center">
+                    Instant Access Bypass (ওটিপি ছাড়া ডেমো প্রবেশ)
+                  </span>
+                  
+                  <button
+                    type="button"
+                    onClick={() => bypassPhoneVerification()}
+                    className="w-full py-4 bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 hover:brightness-110 text-black font-black rounded-2xl text-xs tracking-widest uppercase transition-all shadow-[0_4px_20px_rgba(16,185,129,0.3)] cursor-pointer text-center flex items-center justify-center gap-1.5"
+                  >
+                    <Sparkles className="w-4 h-4" />
+                    <span>সরাসরি প্রবেশ করুন (Bypass & Log In)</span>
+                  </button>
+                </div>
+              </div>
+
+              <div className="mt-6 flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setPhoneErrorType(null)}
+                  className="flex-1 py-3.5 bg-[#0c0515]/80 hover:bg-[#120820] text-violet-300 hover:text-white rounded-2xl text-xs font-bold tracking-widest uppercase transition-all border border-violet-500/10 cursor-pointer text-center"
+                >
+                  Close & Try Later
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

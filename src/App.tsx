@@ -1837,7 +1837,7 @@ export default function App() {
       unsubscribeCalls();
       if (bc) bc.close();
     };
-  }, [loggedInUser.id, loggedInUser.idNo, activeSocialCall, stopRingtone, playDisconnectBeep, handleEndCall, triggerToast]);
+  }, [loggedInUser?.id, loggedInUser?.idNo, activeSocialCall, stopRingtone, playDisconnectBeep, handleEndCall, triggerToast]);
 
   // Call initialization & Ring timeout effect (~25s / 8-10 rings)
   useEffect(() => {

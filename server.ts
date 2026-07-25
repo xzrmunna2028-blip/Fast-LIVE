@@ -76,7 +76,11 @@ async function startServer() {
           console.log(`[Agora Server] Successfully registered chat user: ${cleanUsername}`);
         } else {
           const errBody = await registerResponse.json().catch(() => ({}));
-          console.log(`[Agora Server] Chat registration non-ok response:`, JSON.stringify(errBody));
+          if (errBody && (errBody.error === "duplicate_unique_property_exists" || errBody.exception === "DuplicateUniquePropertyExistsException")) {
+            console.log(`[Agora Server] Chat user ${cleanUsername} already registered. Proceeding with secure login.`);
+          } else {
+            console.log(`[Agora Server] Chat registration non-ok response:`, JSON.stringify(errBody));
+          }
         }
       } catch (regErr: any) {
         console.warn(`[Agora Server] REST registration attempt completed:`, regErr.message);

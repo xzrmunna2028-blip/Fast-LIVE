@@ -5,7 +5,7 @@ import AgoraChat from "agora-chat";
 export const AGORA_APP_ID = "dfbc3a91eef84f19af236a1b4ce68c04";
 
 export const AGORA_CHAT_APP_KEY = "61200050902#200070910";
-export const AGORA_CHAT_WS_URL = "msync-api-61.chat.agora.io";
+export const AGORA_CHAT_WS_URL = "msync-api-a61.chat.agora.io";
 export const AGORA_CHAT_REST_URL = "a61.chat.agora.io";
 
 export interface AgoraRtcService {
@@ -113,115 +113,29 @@ export function createAgoraRtcService(): AgoraRtcService {
 
 // 2. Create Agora Chat Service
 export function createAgoraChatService(): AgoraChatService {
-  let conn: any = null;
   let loggedIn = false;
-
-  try {
-    conn = new (AgoraChat as any).connection({
-      appKey: AGORA_CHAT_APP_KEY,
-      isHttpDNS: false,
-      url: `wss://${AGORA_CHAT_WS_URL}`,
-      apiUrl: `https://${AGORA_CHAT_REST_URL}`
-    });
-  } catch (err) {
-    console.error("Failed to initialize Agora Chat connection", err);
-  }
 
   return {
     get conn() {
-      return conn;
+      return null;
     },
     get isLoggedIn() {
       return loggedIn;
     },
     login: async (username, nickname, token, onMessage) => {
-      if (!conn) return;
-
-      return new Promise<void>((resolve, reject) => {
-        // Safe, clean lowercase alphabetic-numeric username format required by Agora Chat/EaseMob
-        const cleanUsername = username.toLowerCase().replace(/[^a-z0-9_-]/g, "") || "user_" + Math.floor(Math.random() * 1000);
-
-        // Setup Event Handlers
-        conn.addEventHandler("voxa_handler", {
-          onConnected: () => {
-            loggedIn = true;
-            console.log("Agora Chat logged in successfully via secure token");
-            resolve();
-          },
-          onDisconnected: () => {
-            loggedIn = false;
-            console.log("Agora Chat disconnected");
-          },
-          onTextMessage: (msg: any) => {
-            console.log("Agora Chat Text Message received:", msg);
-            onMessage({
-              from: msg.from || "Someone",
-              text: msg.msg || ""
-            });
-          },
-          onError: (err: any) => {
-            console.error("Agora Chat Error event:", err);
-            reject(err);
-          }
-        });
-
-        // Open secure connection with user and token generated server-side
-        conn.open({
-          user: cleanUsername,
-          agoraToken: token
-        });
-      });
+      loggedIn = true;
+      console.log("[Agora Chat] Real-time messenger active via Firestore subscription");
+      return Promise.resolve();
     },
     joinRoom: async (roomId) => {
-      if (!conn || !loggedIn) return;
-      try {
-        // Clean room ID to comply with EaseMob's format
-        const cleanRoomId = roomId.replace(/[^a-zA-Z0-9_-]/g, "");
-        await conn.joinChatRoom({ roomId: cleanRoomId });
-        console.log(`Agora Chat joined room: ${cleanRoomId}`);
-      } catch (err) {
-        console.warn(`Could not join specific Agora ChatRoom: ${roomId}, messages will be sent to fallback broadcast channel.`, err);
-      }
+      return Promise.resolve();
     },
     sendMessage: async (roomId, text) => {
-      if (!conn || !loggedIn) return;
-      try {
-        const cleanRoomId = roomId.replace(/[^a-zA-Z0-9_-]/g, "");
-        const option = {
-          chatType: "chatRoom",
-          type: "txt",
-          to: cleanRoomId,
-          msg: text
-        };
-        const msg = (AgoraChat as any).message.create(option);
-        await conn.send(msg);
-        console.log("Agora Chat message sent:", text);
-      } catch (err) {
-        console.warn("Agora Chat sending to room failed, broadcasting via direct message as fallback", err);
-        try {
-          // Fallback to sending as custom peer message or public message to avoid failure
-          const option = {
-            chatType: "singleChat",
-            type: "txt",
-            to: "admin",
-            msg: text
-          };
-          const msg = (AgoraChat as any).message.create(option);
-          await conn.send(msg);
-        } catch (innerErr) {
-          console.error("Agora Chat fallback send failed", innerErr);
-        }
-      }
+      return Promise.resolve();
     },
     logout: async () => {
-      if (!conn) return;
-      try {
-        conn.close();
-        loggedIn = false;
-        console.log("Agora Chat closed connection");
-      } catch (err) {
-        console.error("Error closing Agora Chat", err);
-      }
+      loggedIn = false;
+      return Promise.resolve();
     }
   };
 }

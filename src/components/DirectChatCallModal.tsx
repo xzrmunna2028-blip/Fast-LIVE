@@ -397,10 +397,12 @@ export function DirectChatCallModal({
         const callData = snap.data() as DirectCallState;
 
         if (callData.status === "ringing") {
-          if (callData.receiverId === currentUser.id) {
+          if (callData.receiverId === currentUser.id && callData.callerId !== currentUser.id) {
             setIncomingCall(callData);
+            setActiveCall(null);
           } else if (callData.callerId === currentUser.id) {
             setActiveCall(callData);
+            setIncomingCall(null);
           }
         } else if (callData.status === "connected") {
           setIncomingCall(null);
@@ -1061,76 +1063,79 @@ export function DirectChatCallModal({
           </form>
         </motion.div>
 
-        {/* INCOMING CALL OVERLAY POPUP */}
+        {/* INCOMING CALL OVERLAY (FULL SCREEN WHATSAPP STYLE - NO CARD/BORDER BOX) */}
         {incomingCall && (
           <AnimatePresence>
-            <div className="fixed inset-0 bg-black/85 backdrop-blur-lg flex items-center justify-center z-[250] p-4">
-              <motion.div
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.8, opacity: 0 }}
-                className="w-full max-w-sm bg-gradient-to-b from-[#1c133a] via-[#120a2a] to-[#0a041a] rounded-[36px] border border-violet-500/40 p-6 flex flex-col items-center text-center shadow-[0_0_50px_rgba(139,92,246,0.5)]"
-              >
-                {/* Caller avatar with pulsing ringing circles */}
-                <div className="relative my-4">
-                  <div className="absolute -inset-4 rounded-full border-2 border-emerald-500/60 animate-ping opacity-75" />
-                  <div className="absolute -inset-8 rounded-full border-2 border-emerald-400/30 animate-ping opacity-40 delay-300" />
+            <div className="fixed inset-0 bg-[#0b141a] z-[250] flex flex-col justify-between p-6 sm:p-10 select-none overflow-hidden font-sans text-white">
+              {/* Top Header info */}
+              <div className="relative z-10 flex items-center justify-between pt-4">
+                <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 backdrop-blur-md border border-white/15">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  <span className="text-xs font-extrabold text-emerald-300">End-to-end encrypted</span>
+                </div>
+                <span className="text-xs font-mono font-bold text-amber-300 bg-amber-500/20 px-3 py-1 rounded-full border border-amber-500/30">
+                  ID Code: #{incomingCall.callerIdNo || "5949396"}
+                </span>
+              </div>
+
+              {/* Center Avatar & User Details */}
+              <div className="relative z-10 flex flex-col items-center text-center my-auto">
+                <div className="relative mb-6">
+                  <div className="absolute -inset-6 rounded-full border-2 border-emerald-400/50 animate-ping opacity-75" />
+                  <div className="absolute -inset-12 rounded-full border-2 border-emerald-300/30 animate-ping opacity-40 delay-300" />
                   
                   <img
                     src={incomingCall.callerAvatar}
                     alt={incomingCall.callerName}
-                    className="w-24 h-24 rounded-full object-cover border-4 border-emerald-400 shadow-2xl relative z-10"
+                    className="w-32 h-32 sm:w-36 sm:h-36 rounded-full object-cover border-4 border-emerald-400 shadow-[0_0_50px_rgba(52,211,153,0.4)] relative z-10"
+                    referrerPolicy="no-referrer"
                   />
                 </div>
 
-                <h3 className="text-xl font-black text-white mt-2">{incomingCall.callerName}</h3>
-                <span className="text-[11px] font-mono text-amber-300 font-extrabold bg-amber-500/15 border border-amber-500/30 px-3 py-0.5 rounded-full my-1">
-                  ID Code: #{incomingCall.callerIdNo || incomingCall.callerId}
-                </span>
-                <p className="text-xs text-emerald-400 font-bold uppercase tracking-widest my-1 animate-pulse flex items-center justify-center gap-1">
-                  {incomingCall.callType === "video" ? <Video className="w-4 h-4" /> : <Phone className="w-4 h-4" />}
-                  <span>Incoming Real-Time {incomingCall.callType === "video" ? "Video" : "Voice"} Call</span>
+                <h2 className="text-2xl sm:text-3xl font-black text-white tracking-wide">{incomingCall.callerName}</h2>
+                <p className="text-sm font-extrabold text-emerald-400 uppercase tracking-widest mt-2 flex items-center justify-center gap-2">
+                  {incomingCall.callType === "video" ? <Video className="w-5 h-5" /> : <Phone className="w-5 h-5" />}
+                  <span>Incoming Real-Time {incomingCall.callType === "video" ? "Video" : "Voice"} Call...</span>
                 </p>
+              </div>
 
-                {/* Answer, Reject, and Quick Message Buttons */}
-                <div className="flex items-center gap-5 mt-6 w-full justify-center">
-                  {/* Reject button */}
-                  <button
-                    onClick={handleRejectCall}
-                    className="flex flex-col items-center gap-1 group cursor-pointer active:scale-90 transition-all"
-                  >
-                    <div className="w-13 h-13 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center shadow-lg shadow-red-600/40">
-                      <PhoneOff className="w-6 h-6" />
-                    </div>
-                    <span className="text-xs font-bold text-red-400">Decline</span>
-                  </button>
+              {/* Bottom Answer / Decline / Message Action Bar */}
+              <div className="relative z-10 w-full max-w-md mx-auto flex items-center justify-evenly pb-8 sm:pb-12">
+                {/* Reject button */}
+                <button
+                  onClick={handleRejectCall}
+                  className="flex flex-col items-center gap-2 group cursor-pointer active:scale-90 transition-all"
+                >
+                  <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-full bg-rose-600 hover:bg-rose-500 text-white flex items-center justify-center shadow-2xl shadow-rose-600/50">
+                    <PhoneOff className="w-7 h-7 sm:w-8 sm:h-8" />
+                  </div>
+                  <span className="text-xs font-black text-rose-400 tracking-wider">Decline</span>
+                </button>
 
-                  {/* Accept button */}
-                  <button
-                    onClick={handleAnswerCall}
-                    className="flex flex-col items-center gap-1 group cursor-pointer active:scale-90 transition-all"
-                  >
-                    <div className="w-16 h-16 rounded-full bg-emerald-500 hover:bg-emerald-400 text-black flex items-center justify-center shadow-xl shadow-emerald-500/50 animate-bounce">
-                      <PhoneCall className="w-7 h-7" />
-                    </div>
-                    <span className="text-xs font-black text-emerald-300">Answer</span>
-                  </button>
+                {/* Accept button */}
+                <button
+                  onClick={handleAnswerCall}
+                  className="flex flex-col items-center gap-2 group cursor-pointer active:scale-90 transition-all"
+                >
+                  <div className="w-20 h-20 sm:w-22 sm:h-22 rounded-full bg-emerald-500 hover:bg-emerald-400 text-black flex items-center justify-center shadow-2xl shadow-emerald-500/60 animate-bounce">
+                    <PhoneCall className="w-9 h-9 sm:w-10 sm:h-10" />
+                  </div>
+                  <span className="text-xs font-black text-emerald-300 tracking-wider">Answer</span>
+                </button>
 
-                  {/* Quick Message button */}
-                  <button
-                    onClick={() => {
-                      triggerToast("Sent auto message: 'I will call you back later!' 📩", "info");
-                    }}
-                    className="flex flex-col items-center gap-1 group cursor-pointer active:scale-90 transition-all"
-                    title="Quick Reply"
-                  >
-                    <div className="w-13 h-13 rounded-full bg-white/10 hover:bg-white/20 border border-white/15 text-slate-200 flex items-center justify-center shadow-lg">
-                      <MessageSquare className="w-5 h-5 text-slate-200" />
-                    </div>
-                    <span className="text-xs font-bold text-slate-300">Message</span>
-                  </button>
-                </div>
-              </motion.div>
+                {/* Quick Message button */}
+                <button
+                  onClick={() => {
+                    triggerToast("Sent quick reply: 'I will call you back soon!' 📩", "info");
+                  }}
+                  className="flex flex-col items-center gap-2 group cursor-pointer active:scale-90 transition-all"
+                >
+                  <div className="w-16 h-16 sm:w-18 sm:h-18 rounded-full bg-white/10 hover:bg-white/20 border border-white/20 text-slate-200 flex items-center justify-center shadow-xl backdrop-blur-md">
+                    <MessageSquare className="w-6 h-6 sm:w-7 sm:h-7" />
+                  </div>
+                  <span className="text-xs font-black text-slate-300 tracking-wider">Message</span>
+                </button>
+              </div>
             </div>
           </AnimatePresence>
         )}

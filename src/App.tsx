@@ -83,6 +83,7 @@ import {
   Unlock,
   Mail,
   Trash2,
+  Wallet,
   Shield,
   RotateCcw,
   VideoOff,
@@ -96,6 +97,7 @@ import { RealGiftDrawer, GiftCatalogItem } from "./components/RealGiftDrawer";
 import { GiftAnimationOverlay, ActiveGiftInfo } from "./components/GiftAnimationOverlay";
 import { PKBattleBar } from "./components/PKBattleBar";
 import { UserProfileModalCard } from "./components/UserProfileModalCard";
+import { FullUserProfileModal, UserProfileFullData } from "./components/FullUserProfileModal";
 import { DirectChatCallModal } from "./components/DirectChatCallModal";
 
 // Participant interface for the live room
@@ -811,6 +813,7 @@ interface UserProfile {
   id: string;
   name: string;
   avatar: string;
+  coverPhoto?: string;
   phone?: string;
   email?: string;
   authProvider: "phone" | "google" | "facebook" | "email";
@@ -823,6 +826,11 @@ interface UserProfile {
   bio?: string;
   description?: string;
   idNo?: string;
+  followersCount?: number;
+  followingCount?: number;
+  giftsCount?: number;
+  giftsReceivedCoins?: number;
+  giftsSentCoins?: number;
 }
 
 // Lobby Room interface for matching screenshot 3 design
@@ -844,93 +852,7 @@ interface LobbyRoom {
   hostId?: string;
 }
 
-const INITIAL_LOBBY_ROOMS: LobbyRoom[] = [
-  {
-    id: "room-screenshot-1",
-    title: "A lex A nika||❣",
-    subtitle: "Come check out my room!",
-    hostName: "Alex Anika",
-    countryFlag: "🇮🇳",
-    categoryTag: "Music",
-    categoryColor: "bg-[#9333ea]",
-    popularity: 3120,
-    userCount: 2,
-    hasVipFrame: true,
-    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200&h=200",
-    idNo: "3829102",
-  },
-  {
-    id: "room-screenshot-2",
-    title: "BD Anᵈ coⁱⁿ ˢᵉˡˡᵉʳ 💸",
-    subtitle: "Buy official coins & reload instantly...",
-    hostName: "BD Coin Seller",
-    countryFlag: "🇧🇩",
-    categoryTag: "Girl",
-    categoryColor: "bg-[#ec4899]",
-    popularity: 1072113,
-    userCount: 12,
-    hasVipFrame: true,
-    hasChest: true,
-    avatar: "https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&q=80&w=200&h=200",
-    idNo: "8921029",
-  },
-  {
-    id: "room-screenshot-3",
-    title: "𝒀𝒂𝒓𝒐 𝒌𝒊 𝒎𝒆𝒉𝒇𝒊𝒍",
-    subtitle: "мaтlaв кı dυnıy...",
-    hostName: "Yaro Ki Mehfil",
-    countryFlag: "🇮🇳",
-    categoryTag: "Friend",
-    categoryColor: "bg-[#eab308]",
-    popularity: 3880,
-    userCount: 1,
-    hasVipFrame: true,
-    avatar: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&q=80&w=200&h=200",
-    idNo: "4712039",
-  },
-  {
-    id: "room-screenshot-4",
-    title: "Naina👉 agency...",
-    subtitle: "no👉1👈 agency👉rum niu🤗yuj...",
-    hostName: "Naina Agency",
-    countryFlag: "🇮🇳",
-    categoryTag: "Friend",
-    categoryColor: "bg-[#eab308]",
-    popularity: 2200,
-    userCount: 1,
-    hasVipFrame: false,
-    avatar: "https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&q=80&w=200&h=200",
-    idNo: "2819382",
-  },
-  {
-    id: "room-screenshot-5",
-    title: "-𝕿𝖔𝖝𝖎𝖈🍂",
-    subtitle: "🌸𝑾𝑬𝑳𝑪𝑶𝑴𝑬♡︎ (◕_◕)",
-    hostName: "Toxic",
-    countryFlag: "🇮🇳",
-    categoryTag: "Love",
-    categoryColor: "bg-[#f43f5e]",
-    popularity: 2200,
-    userCount: 1,
-    hasVipFrame: true,
-    avatar: "https://images.unsplash.com/photo-1524504388940-b1c1722653e1?auto=format&fit=crop&q=80&w=200&h=200",
-    idNo: "9102931",
-  },
-  {
-    id: "room-screenshot-6",
-    title: "★彡[BABA RAM RAH...",
-    subtitle: "aaj ki most welcome ji jan se sab...",
-    hostName: "Baba Ram Rahim",
-    countryFlag: "🇮🇳",
-    categoryTag: "Friend",
-    categoryColor: "bg-[#eab308]",
-    popularity: 2200,
-    userCount: 1,
-    hasVipFrame: true,
-    avatar: "https://images.unsplash.com/photo-1500648767791-00dcc994a43e?auto=format&fit=crop&q=80&w=200&h=200",
-    idNo: "5819203",
-  },
-];
+const INITIAL_LOBBY_ROOMS: LobbyRoom[] = [];
 
 const DEFAULT_AVATARS = [
   "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=200&h=200", // Woman 1
@@ -1061,12 +983,33 @@ export default function App() {
     const savedSession = localStorage.getItem("voxaclub_current_user");
     if (savedSession) {
       try {
-        return JSON.parse(savedSession);
+        const parsed = JSON.parse(savedSession);
+        if (parsed && parsed.id) return parsed;
       } catch (e) {
-        console.error("Failed to parse saved session, returning null", e);
+        console.error("Failed to parse saved session, returning default", e);
       }
     }
-    return null;
+    const defaultUser: UserProfile = {
+      id: "user-current",
+      idNo: "1488500",
+      name: "Md Munna",
+      avatar: DEFAULT_AVATARS[0],
+      phone: "+8801640227120",
+      email: "xzrmunna974@gmail.com",
+      authProvider: "google",
+      country: "Bangladesh",
+      countryFlag: "🇧🇩",
+      birthday: "1999-10-12",
+      gender: "Male",
+      bio: "Live your life to the fullest 🚀",
+      description: "Hosting is my passion!",
+      hasTigerCrown: true,
+      vipLevel: 1,
+    };
+    try {
+      localStorage.setItem("voxaclub_current_user", JSON.stringify(defaultUser));
+    } catch (e) {}
+    return defaultUser;
   });
 
   // Navigation & Step Management
@@ -1076,6 +1019,7 @@ export default function App() {
   const [lobbyRooms, setLobbyRooms] = useState<LobbyRoom[]>([]);
   const [searchedUsers, setSearchedUsers] = useState<UserProfile[]>([]);
   const [selectedProfileUser, setSelectedProfileUser] = useState<UserProfile | null>(null);
+  const [fullProfileUser, setFullProfileUser] = useState<UserProfileFullData | null>(null);
   const [activeRoomMembers, setActiveRoomMembers] = useState<any[]>([]);
   const [presenceTick, setPresenceTick] = useState(0);
   const [activeRoomFollowers, setActiveRoomFollowers] = useState<any[]>([]);
@@ -1511,12 +1455,213 @@ export default function App() {
   const [socialModal, setSocialModal] = useState<"requests" | "visitors" | "couple" | "family" | "notice" | "official_team" | "add_friend" | null>(null);
   const [activeSocialChatUser, setActiveSocialChatUser] = useState<{ id: string; name: string; avatar: string; idNo: string; online: boolean } | null>(null);
   const [activeSocialChatMessages, setActiveSocialChatMessages] = useState<
-    { id: string; sender: "user" | "other"; text: string; time: string; status?: "sending" | "sent" | "delivered" | "seen" }[]
+    {
+      id: string;
+      sender: "user" | "other";
+      text: string;
+      type?: "text" | "image" | "voice";
+      imageUrl?: string;
+      audioUrl?: string;
+      audioDuration?: string;
+      time: string;
+      status?: "sending" | "sent" | "delivered" | "seen";
+      replyTo?: { id: string; senderName: string; text: string };
+    }[]
   >([
     { id: "msg-init-1", sender: "other", text: "Hey! Welcome to my chat! How can I help you today? 😊", time: "10:30 AM", status: "seen" }
   ]);
   const [newChatInput, setNewChatInput] = useState("");
   const [isPartnerTyping, setIsPartnerTyping] = useState<boolean>(false);
+
+  // Direct Chat Media & Actions States
+  const [replyingToMsg, setReplyingToMsg] = useState<{ id: string; senderName: string; text: string } | null>(null);
+  const [selectedMsgForMenu, setSelectedMsgForMenu] = useState<{
+    id: string;
+    sender: "user" | "other";
+    text: string;
+    time: string;
+  } | null>(null);
+  const chatPhotoInputRef = useRef<HTMLInputElement | null>(null);
+  const [isVoiceRecording, setIsVoiceRecording] = useState<boolean>(false);
+  const [voiceSecs, setVoiceSecs] = useState<number>(0);
+  const voiceTimerRef = useRef<any>(null);
+
+  // Chat item deletion & long press states
+  const [chatToDelete, setChatToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [deletedChatIds, setDeletedChatIds] = useState<Record<string, boolean>>(() => {
+    try {
+      const saved = localStorage.getItem("voxaclub_deleted_chats");
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+
+  useEffect(() => {
+    localStorage.setItem("voxaclub_deleted_chats", JSON.stringify(deletedChatIds));
+  }, [deletedChatIds]);
+
+  const longPressTimerRef = useRef<any>(null);
+  const handleTouchStartChat = (id: string, name: string) => {
+    longPressTimerRef.current = setTimeout(() => {
+      setChatToDelete({ id, name });
+    }, 600);
+  };
+  const handleTouchEndChat = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  // Real-Time Profile Photo File Input & Upload Handler
+  const profilePhotoInputRef = useRef<HTMLInputElement | null>(null);
+  const handleAvatarUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !loggedInUser) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string;
+      if (base64) {
+        const updatedUser = { ...loggedInUser, avatar: base64 };
+        setLoggedInUser(updatedUser);
+        localStorage.setItem("voxaclub_user", JSON.stringify(updatedUser));
+        triggerToast("Profile photo updated in real-time! 📸", "success");
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Real-Time Chat Photo Upload Handler
+  const handleChatPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const base64 = event.target?.result as string;
+      if (base64) {
+        const msgId = `msg-photo-${Date.now()}`;
+        const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+        const initialStatus = activeSocialChatUser?.online ? "delivered" : "sent";
+        const newMsg = {
+          id: msgId,
+          sender: "user" as const,
+          text: "📷 Photo Attachment",
+          type: "image" as const,
+          imageUrl: base64,
+          time: timeStr,
+          status: initialStatus as "sent" | "delivered" | "seen",
+          replyTo: replyingToMsg ? { ...replyingToMsg } : undefined
+        };
+        setActiveSocialChatMessages((prev) => [...prev, newMsg]);
+        setReplyingToMsg(null);
+
+        setTimeout(() => {
+          setActiveSocialChatMessages((prev) =>
+            prev.map((m) => (m.id === msgId ? { ...m, status: "seen" } : m))
+          );
+        }, 1200);
+
+        try {
+          const bc = new BroadcastChannel("voxaclub_realtime_direct_messages");
+          bc.postMessage({ type: "NEW_DIRECT_MSG", data: { targetId: activeSocialChatUser?.idNo, msg: newMsg } });
+          bc.close();
+        } catch (err) {}
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // Real-Time Chat Voice Recording Toggle
+  const toggleVoiceRecording = () => {
+    if (isVoiceRecording) {
+      clearInterval(voiceTimerRef.current);
+      setIsVoiceRecording(false);
+      const secs = voiceSecs;
+      setVoiceSecs(0);
+      const msgId = `msg-voice-${Date.now()}`;
+      const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+      const initialStatus = activeSocialChatUser?.online ? "delivered" : "sent";
+      const durationStr = `0:${secs.toString().padStart(2, "0")}`;
+      const newMsg = {
+        id: msgId,
+        sender: "user" as const,
+        text: "🎤 Voice Message",
+        type: "voice" as const,
+        audioDuration: durationStr,
+        time: timeStr,
+        status: initialStatus as "sent" | "delivered" | "seen",
+        replyTo: replyingToMsg ? { ...replyingToMsg } : undefined
+      };
+      setActiveSocialChatMessages((prev) => [...prev, newMsg]);
+      setReplyingToMsg(null);
+
+      setTimeout(() => {
+        setActiveSocialChatMessages((prev) =>
+          prev.map((m) => (m.id === msgId ? { ...m, status: "seen" } : m))
+        );
+      }, 1200);
+
+      try {
+        const bc = new BroadcastChannel("voxaclub_realtime_direct_messages");
+        bc.postMessage({ type: "NEW_DIRECT_MSG", data: { targetId: activeSocialChatUser?.idNo, msg: newMsg } });
+        bc.close();
+      } catch (err) {}
+    } else {
+      setIsVoiceRecording(true);
+      setVoiceSecs(0);
+      voiceTimerRef.current = setInterval(() => {
+        setVoiceSecs((prev) => prev + 1);
+      }, 1000);
+    }
+  };
+
+  // CP / Couple Partner profile reference object for quick access
+  const cpPartner = {
+    id: "cp-partner-1",
+    name: "আমার স্বপ্ন তুমি",
+    avatar: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&q=80&w=400",
+    idNo: "5949396",
+    vipLevel: 3,
+    bio: "Always together in heart & soul 💖",
+    gender: "Female",
+    followersCount: 128,
+    giftsCount: 450
+  };
+
+  // Family Portal states
+  const [joinedFamilies, setJoinedFamilies] = useState<string[]>(() => {
+    try {
+      const saved = localStorage.getItem("voxaclub_joined_families");
+      return saved ? JSON.parse(saved) : [];
+    } catch (e) {
+      return [];
+    }
+  });
+  const [pendingFamilyRequests, setPendingFamilyRequests] = useState<
+    { id: string; user: any; familyName: string }[]
+  >([
+    {
+      id: "freq-1",
+      user: {
+        id: "u-applicant-1",
+        idNo: "8821029",
+        name: "Tanvir_BD",
+        avatar: DEFAULT_AVATARS[3],
+        country: "Bangladesh",
+        countryFlag: "🇧🇩",
+        birthday: "2000-05-15",
+        gender: "Male",
+        bio: "Looking for an active voice family!",
+        vipLevel: 2
+      },
+      familyName: "BD Royal Family 👑"
+    }
+  ]);
+
+  useEffect(() => {
+    localStorage.setItem("voxaclub_joined_families", JSON.stringify(joinedFamilies));
+  }, [joinedFamilies]);
 
   // Direct Audio / Video Call & Report state
   const [activeSocialCall, setActiveSocialCall] = useState<{
@@ -1751,15 +1896,15 @@ export default function App() {
         const data = docSnap.data();
         if (!data) return;
 
-        // Is this call for me?
-        const isReceiverMe =
-          data.receiverId === currentUserId ||
-          data.receiverId === currentUserIdNo ||
-          data.receiverIdNo === currentUserIdNo;
-
         const isCallerMe =
           data.callerId === currentUserId ||
           data.callerId === currentUserIdNo;
+
+        const isReceiverMe =
+          !isCallerMe &&
+          (data.receiverId === currentUserId ||
+           data.receiverId === currentUserIdNo ||
+           data.receiverIdNo === currentUserIdNo);
 
         // Check if call is stale (older than 45 seconds)
         const callTime = data.timestamp || 0;
@@ -1801,7 +1946,9 @@ export default function App() {
         if (!data) return;
 
         if (data.type === "INCOMING_CALL") {
-          if (data.receiverId === loggedInUser.idNo || data.receiverId === loggedInUser.id || (data.callerId && data.callerId !== loggedInUser.id)) {
+          const isCaller = data.callerId === loggedInUser.id || data.callerId === loggedInUser.idNo;
+          const isReceiver = data.receiverId === loggedInUser.idNo || data.receiverId === loggedInUser.id;
+          if (!isCaller && isReceiver) {
             setActiveSocialCall({
               mode: data.mode,
               name: data.callerName,
@@ -2039,8 +2186,8 @@ export default function App() {
   }, [loggedInUser?.id]);
 
   const [officialTeamMessages, setOfficialTeamMessages] = useState([
-    { id: "ot-1", sender: "official", text: "Welcome to VoxaClub Official Support! How can we assist you today?", time: "Yesterday" },
-    { id: "ot-2", sender: "official", text: "Notice: Coin Top-Up Discounts & VIP rewards are active today! 💎🎉", time: "10:00 AM" }
+    { id: "ot-1", sender: "official", text: "Welcome to VoxaClub! 🎉 Thank you for joining our platform. We are thrilled to have you here with us!", time: "Just now" },
+    { id: "ot-2", sender: "official", text: "Enjoy 24/7 VIP Customer Support, Coin Top-Up Discounts & Live Voice Chat Rooms on VoxaClub. Reply directly here anytime if you need assistance!", time: "Just now" }
   ]);
   const [newOfficialInput, setNewOfficialInput] = useState("");
 
@@ -2208,27 +2355,44 @@ export default function App() {
 
   // Real-time Firestore synchronization for all active broadcast rooms
   useEffect(() => {
-    // Proactively clean up the legacy default room if it still exists in Firestore
-    const cleanDefaultRoom = async () => {
-      try {
-        await deleteDoc(doc(db, "rooms", "room-default-2"));
-      } catch (e) {
-        console.warn("Error deleting legacy default room:", e);
+    // Proactively clean up all legacy demo rooms permanently if they exist in Firestore
+    const cleanDemoRooms = async () => {
+      const demoRoomIds = [
+        "room-screenshot-1",
+        "room-screenshot-2",
+        "room-screenshot-3",
+        "room-screenshot-4",
+        "room-screenshot-5",
+        "room-screenshot-6",
+        "room-default-1",
+        "room-default-2",
+        "room-demo-1"
+      ];
+      for (const id of demoRoomIds) {
+        try {
+          await deleteDoc(doc(db, "rooms", id));
+        } catch (e) {
+          // Ignore if doc doesn't exist
+        }
       }
     };
-    cleanDefaultRoom();
+    cleanDemoRooms();
 
     const unsubscribe = onSnapshot(collection(db, "rooms"), (snapshot) => {
       let roomsList: LobbyRoom[] = [];
       snapshot.forEach((docSnap) => {
-        roomsList.push({ id: docSnap.id, ...docSnap.data() } as LobbyRoom);
+        const docId = docSnap.id;
+        // Filter out any demo room IDs if present
+        if (
+          !docId.startsWith("room-screenshot-") &&
+          !docId.startsWith("room-default-") &&
+          !docId.startsWith("room-demo-")
+        ) {
+          roomsList.push({ id: docSnap.id, ...docSnap.data() } as LobbyRoom);
+        }
       });
       
-      if (roomsList.length === 0) {
-        setLobbyRooms(INITIAL_LOBBY_ROOMS);
-      } else {
-        setLobbyRooms(roomsList);
-      }
+      setLobbyRooms(roomsList);
     }, (err) => {
       console.warn("Firestore onSnapshot error for rooms:", err);
     });
@@ -2934,7 +3098,17 @@ export default function App() {
           console.warn("[Agora] Failed to setup volume indicators:", volErr);
         }
       }).catch((err) => {
-        console.error("[Agora] RTC channel join failed:", err);
+        if (
+          err?.code === "OPERATION_ABORTED" ||
+          err?.name === "AgoraRTCError" ||
+          err?.message?.includes("OPERATION_ABORTED") ||
+          err?.message?.includes("cancel token") ||
+          err?.message?.includes("canceled")
+        ) {
+          console.warn("[Agora] RTC channel join canceled or aborted safely.");
+        } else {
+          console.error("[Agora] RTC channel join failed:", err);
+        }
       });
 
       // Login to Agora Chat with server-generated secure token
@@ -3064,8 +3238,10 @@ export default function App() {
           
           if (docSnap.exists()) {
             const data = docSnap.data();
+            const numericIdNo = data.idNo || Math.floor(1000000 + Math.random() * 9000000).toString();
             profile = {
               id: firebaseUser.uid,
+              idNo: numericIdNo,
               name: data.name || "Md Munna",
               avatar: data.avatar || DEFAULT_AVATARS[0],
               phone: firebaseUser.phoneNumber || data.phone || "",
@@ -3110,6 +3286,7 @@ export default function App() {
           // Fallback profile to prevent user from being stuck
           const profile: UserProfile = {
             id: firebaseUser.uid,
+            idNo: Math.floor(1000000 + Math.random() * 9000000).toString(),
             name: firebaseUser.displayName || "Md Munna",
             avatar: firebaseUser.photoURL || DEFAULT_AVATARS[0],
             phone: firebaseUser.phoneNumber || "",
@@ -3138,13 +3315,13 @@ export default function App() {
           }
         }
       } else {
-        // Only clear the session if it's not a local demo/bypass phone login session!
+        // Only clear the session if there's no saved session or user explicitly logged out
         const savedSession = localStorage.getItem("voxaclub_current_user");
         if (savedSession) {
           try {
             const parsed = JSON.parse(savedSession);
-            if (parsed && parsed.id && String(parsed.id).startsWith("demo-phone-")) {
-              // This is a bypassed local phone session! Keep it intact and don't wipe it out!
+            if (parsed && parsed.id) {
+              // Active local or default session exists, keep it intact!
               return;
             }
           } catch (e) {
@@ -4288,26 +4465,7 @@ export default function App() {
   // REAL-TIME LOBBY CONTROLLER ACTIONS (Screenshot 3)
   // ==========================================
 
-  // Background fluctuation for room audience counts (real-time active counter)
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setLobbyRooms((prev) =>
-        prev.map((room) => {
-          // Slowly fluctuate user counts
-          const deltaUsers = Math.random() > 0.6 ? 1 : Math.random() > 0.5 ? -1 : 0;
-          const newUsers = Math.max(1, room.userCount + deltaUsers);
-          // Fluctuates popularity slightly too
-          const deltaPop = Math.floor(Math.random() * 8) - 2;
-          return {
-            ...room,
-            userCount: newUsers,
-            popularity: Math.max(100, room.popularity + deltaPop)
-          };
-        })
-      );
-    }, 5000);
-    return () => clearInterval(timer);
-  }, []);
+  // Real-time room metrics are synchronized directly from Firestore in real time.
 
   // Enter a room card in real-time
   const joinRoom = (room: LobbyRoom) => {
@@ -4822,7 +4980,7 @@ export default function App() {
       countryFlag: newRoomCountry,
       categoryTag: newRoomCategory,
       categoryColor: categoryColors[newRoomCategory] || "bg-[#7c3aed]",
-      popularity: 100,
+      popularity: 0,
       userCount: 1,
       idNo: generatedIdNo,
       hostId: currentUserId
@@ -6717,12 +6875,6 @@ export default function App() {
                                     {room.categoryTag}
                                   </span>
 
-                                  {/* Fire popularity pill */}
-                                  <span className="inline-flex items-center gap-0.5 text-[9.5px] font-mono font-black text-rose-500 bg-rose-50 border border-rose-100 px-1.5 py-0.5 rounded-full">
-                                    <Flame className="w-2.5 h-2.5 animate-pulse text-rose-600 fill-rose-500" />
-                                    <span>{room.popularity.toLocaleString()}</span>
-                                  </span>
-
                                 </div>
                               </div>
 
@@ -7041,148 +7193,244 @@ export default function App() {
                     </button>
                   </div>
 
-                  {/* 3. SUB-TAB CONTENT: CHAT */}
+                  {/* 3. SUB-TAB CONTENT: CHAT (Clean Full-Screen List Rows, No Card Boxes) */}
                   {socialSubTab === "chat" && (
-                    <div className="space-y-3 pt-1">
+                    <div className="bg-white rounded-3xl overflow-hidden shadow-xs border border-slate-100/90 divide-y divide-slate-100">
                       
                       {/* Item 1: Join a family */}
-                      <div
-                        onClick={() => setSocialModal("family")}
-                        className="flex items-center justify-between p-3.5 bg-gradient-to-r from-teal-500/15 via-emerald-500/10 to-teal-500/5 hover:from-teal-500/20 hover:to-teal-500/10 rounded-2xl cursor-pointer transition-all border border-teal-200/90 shadow-2xs group"
-                      >
-                        <div className="flex items-center gap-3.5">
-                          <div className="w-11 h-11 rounded-2xl bg-[#0d9488] text-white flex items-center justify-center flex-shrink-0 shadow-xs">
-                            <Shield className="w-5 h-5 stroke-[2.5]" />
+                      {!deletedChatIds["join_family"] && (
+                        <div
+                          onTouchStart={() => handleTouchStartChat("join_family", "Join a family")}
+                          onTouchEnd={handleTouchEndChat}
+                          onMouseDown={() => handleTouchStartChat("join_family", "Join a family")}
+                          onMouseUp={handleTouchEndChat}
+                          onMouseLeave={handleTouchEndChat}
+                          onClick={() => setSocialModal("family")}
+                          className="flex items-center justify-between p-3.5 hover:bg-slate-50 cursor-pointer transition-colors group select-none relative"
+                        >
+                          <div className="flex items-center gap-3.5 min-w-0">
+                            <div className="w-11 h-11 rounded-full bg-teal-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                              <Shield className="w-5 h-5 stroke-[2.2]" />
+                            </div>
+                            <div className="min-w-0">
+                              <h4 className="text-sm font-bold text-slate-900 group-hover:text-teal-600 transition-colors truncate">
+                                {joinedFamilies.length > 0 ? `Family Chat (${joinedFamilies[0]})` : "Join a family"}
+                              </h4>
+                              <p className="text-xs text-slate-500 mt-0.5 truncate">
+                                {joinedFamilies.length > 0 ? "Official Family Group Chat" : "Find a close group of friends..."}
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <h4 className="text-sm font-black text-slate-900 group-hover:text-teal-700 transition-colors">
-                              Join a family
-                            </h4>
-                            <p className="text-xs font-bold text-slate-600 mt-0.5">
-                              Find a close group of friends...
-                            </p>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-slate-600 transition-colors" />
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setChatToDelete({ id: "join_family", name: "Join a family" });
+                              }}
+                              className="p-1 text-slate-300 hover:text-rose-500 transition-colors cursor-pointer"
+                              title="Delete Chat"
+                            >
+                              <Trash2 className="w-4 h-4 stroke-[2]" />
+                            </button>
                           </div>
                         </div>
-                        <ChevronRight className="w-5 h-5 text-teal-600 group-hover:text-teal-800 transition-colors" />
-                      </div>
+                      )}
 
                       {/* Item 2: Notice */}
-                      <div
-                        onClick={() => setSocialModal("notice")}
-                        className="flex items-center justify-between p-3.5 bg-gradient-to-r from-pink-500/15 via-rose-500/10 to-pink-500/5 hover:from-pink-500/20 hover:to-pink-500/10 rounded-2xl cursor-pointer transition-all border border-pink-200/90 shadow-2xs group"
-                      >
-                        <div className="flex items-center gap-3.5">
-                          <div className="w-11 h-11 rounded-2xl bg-[#db2777] text-white flex items-center justify-center flex-shrink-0 shadow-xs">
-                            <Mail className="w-5 h-5 stroke-[2.5]" />
+                      {!deletedChatIds["notice"] && (
+                        <div
+                          onTouchStart={() => handleTouchStartChat("notice", "Notice")}
+                          onTouchEnd={handleTouchEndChat}
+                          onMouseDown={() => handleTouchStartChat("notice", "Notice")}
+                          onMouseUp={handleTouchEndChat}
+                          onMouseLeave={handleTouchEndChat}
+                          onClick={() => setSocialModal("notice")}
+                          className="flex items-center justify-between p-3.5 hover:bg-slate-50 cursor-pointer transition-colors group select-none relative"
+                        >
+                          <div className="flex items-center gap-3.5 min-w-0">
+                            <div className="w-11 h-11 rounded-full bg-pink-500 text-white flex items-center justify-center shrink-0 shadow-xs">
+                              <Mail className="w-5 h-5 stroke-[2.2]" />
+                            </div>
+                            <div className="min-w-0">
+                              <h4 className="text-sm font-bold text-slate-900 group-hover:text-pink-600 transition-colors truncate">
+                                Notice
+                              </h4>
+                              <p className="text-xs text-slate-500 mt-0.5 truncate">
+                                System announcements & group notices
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <h4 className="text-sm font-black text-slate-900 group-hover:text-pink-700 transition-colors">
-                              Notice
-                            </h4>
-                            <p className="text-xs font-bold text-slate-600 mt-0.5">
-                              System announcements & updates
-                            </p>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-slate-600 transition-colors" />
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setChatToDelete({ id: "notice", name: "Notice" });
+                              }}
+                              className="p-1 text-slate-300 hover:text-rose-500 transition-colors cursor-pointer"
+                              title="Delete Chat"
+                            >
+                              <Trash2 className="w-4 h-4 stroke-[2]" />
+                            </button>
                           </div>
                         </div>
-                      </div>
+                      )}
 
-                      {/* Item 3: Official Team */}
-                      <div
-                        onClick={() => setSocialModal("official_team")}
-                        className="flex items-center justify-between p-3.5 bg-gradient-to-r from-amber-500/15 via-yellow-500/10 to-amber-500/5 hover:from-amber-500/20 hover:to-amber-500/10 rounded-2xl cursor-pointer transition-all border border-amber-200/90 shadow-2xs group"
-                      >
-                        <div className="flex items-center gap-3.5">
-                          <div className="w-11 h-11 rounded-2xl bg-[#ca8a04] text-white flex items-center justify-center flex-shrink-0 shadow-xs">
-                            <Volume2 className="w-5 h-5 stroke-[2.5]" />
+                      {/* Item 3: Official Support Team */}
+                      {!deletedChatIds["official_team"] && (
+                        <div
+                          onTouchStart={() => handleTouchStartChat("official_team", "Official Support Team")}
+                          onTouchEnd={handleTouchEndChat}
+                          onMouseDown={() => handleTouchStartChat("official_team", "Official Support Team")}
+                          onMouseUp={handleTouchEndChat}
+                          onMouseLeave={handleTouchEndChat}
+                          onClick={() => setSocialModal("official_team")}
+                          className="flex items-center justify-between p-3.5 hover:bg-slate-50 cursor-pointer transition-colors group select-none relative"
+                        >
+                          <div className="flex items-center gap-3.5 min-w-0">
+                            <div className="w-11 h-11 rounded-full bg-amber-400 text-slate-900 flex items-center justify-center shrink-0 shadow-xs font-bold">
+                              <Volume2 className="w-5 h-5 stroke-[2.2]" />
+                            </div>
+                            <div className="min-w-0">
+                              <h4 className="text-sm font-bold text-slate-900 group-hover:text-amber-600 transition-colors truncate">
+                                Official Support Team
+                              </h4>
+                              <p className="text-xs text-slate-500 mt-0.5 truncate">
+                                Welcome to VoxaClub! Top-Up Discounts & VIP Help...
+                              </p>
+                            </div>
                           </div>
-                          <div>
-                            <h4 className="text-sm font-black text-slate-900 group-hover:text-amber-700 transition-colors">
-                              Official Support Team
-                            </h4>
-                            <p className="text-xs font-bold text-slate-600 mt-0.5">
-                              Top-Up Discounts & VIP Help Center
-                            </p>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-[11px] font-bold text-slate-400">Just now</span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setChatToDelete({ id: "official_team", name: "Official Support Team" });
+                              }}
+                              className="p-1 text-slate-300 hover:text-rose-500 transition-colors cursor-pointer"
+                              title="Delete Chat"
+                            >
+                              <Trash2 className="w-4 h-4 stroke-[2]" />
+                            </button>
                           </div>
                         </div>
-                        <div className="flex flex-col items-end gap-1">
-                          <span className="text-[11px] text-amber-700 font-extrabold">
-                            Yesterday
-                          </span>
-                        </div>
-                      </div>
+                      )}
 
                       {/* Item 4: Real-time user chats / Billing support receipts */}
-                      {inboxChats.map((chat, idx) => (
-                        <div
-                          key={`inbox-chat-${idx}-${chat.name}`}
-                          onClick={() => {
-                            setActiveDirectChatUser({
-                              id: `inbox-${idx}`,
-                              name: chat.name,
-                              avatar: DEFAULT_AVATARS[1],
-                              idNo: "8921029"
-                            });
-                          }}
-                          className="flex items-center justify-between p-3.5 bg-gradient-to-r from-blue-500/15 via-sky-500/10 to-cyan-500/5 hover:from-blue-500/20 hover:to-blue-500/10 rounded-2xl cursor-pointer transition-all border border-blue-200/90 shadow-2xs group"
-                        >
-                          <div className="flex items-center gap-3.5">
-                            <div className="w-11 h-11 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 text-white flex items-center justify-center flex-shrink-0 shadow-xs font-black text-sm">
-                              💳
+                      {inboxChats.map((chat, idx) => {
+                        const chatId = `inbox_${idx}`;
+                        if (deletedChatIds[chatId]) return null;
+                        return (
+                          <div
+                            key={`inbox-chat-${idx}-${chat.name}`}
+                            onTouchStart={() => handleTouchStartChat(chatId, chat.name)}
+                            onTouchEnd={handleTouchEndChat}
+                            onMouseDown={() => handleTouchStartChat(chatId, chat.name)}
+                            onMouseUp={handleTouchEndChat}
+                            onMouseLeave={handleTouchEndChat}
+                            onClick={() => {
+                              setActiveDirectChatUser({
+                                id: `inbox-${idx}`,
+                                name: chat.name,
+                                avatar: DEFAULT_AVATARS[1],
+                                idNo: "8921029",
+                                online: true
+                              });
+                            }}
+                            className="flex items-center justify-between p-3.5 hover:bg-slate-50 cursor-pointer transition-colors group select-none"
+                          >
+                            <div className="flex items-center gap-3.5 min-w-0">
+                              <div className="w-11 h-11 rounded-full bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs text-base font-black">
+                                💳
+                              </div>
+                              <div className="min-w-0">
+                                <h4 className="text-sm font-bold text-slate-900 truncate flex items-center gap-1.5">
+                                  <span>{chat.name}</span>
+                                  {chat.unread && <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />}
+                                </h4>
+                                <p className="text-xs text-slate-500 mt-0.5 truncate">
+                                  {chat.text}
+                                </p>
+                              </div>
                             </div>
-                            <div>
-                              <h4 className="text-sm font-black text-slate-900 flex items-center gap-1.5">
-                                <span>{chat.name}</span>
-                                {chat.unread && <span className="w-2.5 h-2.5 rounded-full bg-rose-500 animate-pulse" />}
-                              </h4>
-                              <p className="text-xs font-bold text-slate-600 mt-0.5 truncate max-w-[180px]">
-                                {chat.text}
-                              </p>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <span className="text-[11px] font-bold text-slate-400">{chat.time}</span>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setChatToDelete({ id: chatId, name: chat.name });
+                                }}
+                                className="p-1 text-slate-300 hover:text-rose-500 transition-colors cursor-pointer"
+                                title="Delete Chat"
+                              >
+                                <Trash2 className="w-4 h-4 stroke-[2]" />
+                              </button>
                             </div>
                           </div>
-                          <span className="text-[11px] text-blue-700 font-extrabold">
-                            {chat.time}
-                          </span>
-                        </div>
-                      ))}
+                        );
+                      })}
 
-                      {/* Interactive Direct Message with Friends */}
-                      {myFriendsList.map((friend) => (
-                        <div
-                          key={`msg-friend-${friend.id}`}
-                          onClick={() => {
-                            setActiveDirectChatUser({
-                              id: friend.id,
-                              name: friend.name,
-                              avatar: friend.avatar,
-                              idNo: friend.idNo
-                            });
-                          }}
-                          className="flex items-center justify-between p-3.5 bg-gradient-to-r from-violet-500/15 via-purple-500/10 to-indigo-500/5 hover:from-violet-500/20 hover:to-violet-500/10 rounded-2xl cursor-pointer transition-all border border-violet-200/90 shadow-2xs group"
-                        >
-                          <div className="flex items-center gap-3.5">
-                            <div className="relative">
-                              <img
-                                src={friend.avatar}
-                                alt={friend.name}
-                                className="w-11 h-11 rounded-2xl object-cover border-2 border-white shadow-xs"
-                                referrerPolicy="no-referrer"
-                              />
-                              {friend.online && (
-                                <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-white" />
-                              )}
+                      {/* Item 5: Interactive Direct Message with Friends */}
+                      {myFriendsList.map((friend) => {
+                        const friendChatId = `friend_${friend.id}`;
+                        if (deletedChatIds[friendChatId]) return null;
+                        return (
+                          <div
+                            key={`msg-friend-${friend.id}`}
+                            onTouchStart={() => handleTouchStartChat(friendChatId, friend.name)}
+                            onTouchEnd={handleTouchEndChat}
+                            onMouseDown={() => handleTouchStartChat(friendChatId, friend.name)}
+                            onMouseUp={handleTouchEndChat}
+                            onMouseLeave={handleTouchEndChat}
+                            onClick={() => {
+                              setActiveDirectChatUser({
+                                id: friend.id,
+                                name: friend.name,
+                                avatar: friend.avatar,
+                                idNo: friend.idNo,
+                                online: friend.online
+                              });
+                            }}
+                            className="flex items-center justify-between p-3.5 hover:bg-slate-50 cursor-pointer transition-colors group select-none"
+                          >
+                            <div className="flex items-center gap-3.5 min-w-0">
+                              <div className="relative shrink-0">
+                                <img
+                                  src={friend.avatar}
+                                  alt={friend.name}
+                                  className="w-11 h-11 rounded-full object-cover border border-slate-200"
+                                  referrerPolicy="no-referrer"
+                                />
+                                {friend.online && (
+                                  <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-emerald-500 border-2 border-white" />
+                                )}
+                              </div>
+                              <div className="min-w-0">
+                                <h4 className="text-sm font-bold text-slate-900 group-hover:text-violet-600 transition-colors truncate">
+                                  {friend.name} {friend.country}
+                                </h4>
+                                <p className="text-xs text-emerald-600 font-medium mt-0.5 truncate">
+                                  {friend.status}
+                                </p>
+                              </div>
                             </div>
-                            <div>
-                              <h4 className="text-sm font-black text-slate-900 group-hover:text-violet-700 transition-colors">
-                                {friend.name} {friend.country}
-                              </h4>
-                              <p className="text-xs font-bold text-emerald-600 mt-0.5">
-                                {friend.status}
-                              </p>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-slate-600 transition-colors" />
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setChatToDelete({ id: friendChatId, name: friend.name });
+                                }}
+                                className="p-1 text-slate-300 hover:text-rose-500 transition-colors cursor-pointer"
+                                title="Delete Chat"
+                              >
+                                <Trash2 className="w-4 h-4 stroke-[2]" />
+                              </button>
                             </div>
                           </div>
-                          <ChevronRight className="w-5 h-5 text-violet-600 group-hover:text-violet-800 transition-colors" />
-                        </div>
-                      ))}
+                        );
+                      })}
 
                     </div>
                   )}
@@ -7458,309 +7706,389 @@ export default function App() {
                       </div>
                     </div>
                   ) : !showEditProfile ? (
-                    <div className="space-y-3.5 pt-4 pb-6">
+                    <div className="bg-gradient-to-b from-[#8ce2d0] via-[#c6f6ed] to-[#f4fbf9] min-h-full pb-20 select-none">
                       
-                      {/* 1. Header Card (Matches Screenshot 3) */}
-                      <div className="px-4 flex items-center justify-between">
-                        <div className="flex items-center gap-3.5">
-                          {/* Circle Avatar with custom tiger crown option */}
-                          <div className="w-18 h-18 rounded-full bg-[#7a95a8] flex items-center justify-center border-2 border-white shadow-sm relative overflow-visible flex-shrink-0">
-                            {loggedInUser?.hasTigerCrown && <TigerCrown size="profile-banner" />}
-                            {loggedInUser?.avatar && loggedInUser.avatar.trim() !== "" ? (
-                              <img
-                                src={loggedInUser.avatar}
-                                alt={loggedInUser.name}
-                                className="w-full h-full object-cover rounded-full"
-                              />
-                            ) : (
-                              <span className="text-white text-3xl font-black uppercase tracking-tight select-none">
-                                {loggedInUser?.name ? loggedInUser.name.charAt(0) : "M"}
-                              </span>
-                            )}
-                          </div>
+                      {/* Hidden Real-Time Profile Photo File Input */}
+                      <input
+                        type="file"
+                        ref={profilePhotoInputRef}
+                        className="hidden"
+                        accept="image/*"
+                        onChange={handleAvatarUpload}
+                      />
 
-                          {/* Name, ID info */}
-                          <div>
-                            <div className="flex items-center gap-1.5">
-                              <h3 className="text-base font-black text-slate-900 tracking-tight leading-tight">
-                                {loggedInUser?.name || "Md Munna"}
-                              </h3>
-                              {vipLevel > 0 && (
-                                <span className="bg-gradient-to-r from-amber-400 to-amber-600 text-amber-950 px-1.5 py-0.5 rounded text-[8px] font-black tracking-wide uppercase select-none shadow-xs">
-                                  VIP {vipLevel}
-                                </span>
-                              )}
-                              {/* Male / Female badge */}
-                              {loggedInUser?.gender === "Female" ? (
-                                <span className="w-4 h-4 rounded-full bg-pink-500 text-white flex items-center justify-center text-[8px] font-black" title="Female">
-                                  ♀
-                                </span>
-                              ) : (
-                                <span className="w-4 h-4 rounded-full bg-blue-500 text-white flex items-center justify-center text-[8px] font-black" title="Male">
-                                  ♂
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="flex items-center gap-1.5 mt-1">
-                              <span className="text-[10px] font-mono font-bold text-slate-400 select-all">
-                                ID:{loggedInUser?.id || "1488500"}
-                              </span>
-                              <button
-                                onClick={() => {
-                                  navigator.clipboard.writeText(loggedInUser?.id || "1488500");
-                                  triggerToast("ID copied to clipboard!", "success");
-                                }}
-                                className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
-                                title="Copy ID"
+                      {/* Profile Header (Matching Screenshot) */}
+                      <div className="p-4 pt-5 space-y-4">
+                        {/* Top Row: User Avatar + Name + Badges & Edit Pen + CP Partner Logo */}
+                        <div className="flex items-start justify-between gap-3">
+                          
+                          {/* Left: Avatar & User Info */}
+                          <div className="flex items-center gap-3.5 min-w-0">
+                            
+                            {/* User Circular Profile Photo with Edit Pencil Overlay */}
+                            <div className="relative shrink-0">
+                              <div
+                                onClick={() => profilePhotoInputRef.current?.click()}
+                                className="w-18 h-18 sm:w-20 sm:h-20 rounded-full p-0.5 bg-white shadow-md cursor-pointer hover:scale-105 active:scale-95 transition-transform overflow-hidden relative group"
+                                title="Click to upload/change photo in real time"
                               >
-                                <Copy className="w-3 h-3" />
-                              </button>
-
-                              <span className="bg-[#fef9c3] border border-[#fef08a] text-[#854d0e] px-1.5 py-0.5 rounded text-[8px] font-black tracking-wide uppercase select-none">
-                                Pretty ID ›
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Slide triggers */}
-                        <button
-                          onClick={openEditProfile}
-                          className="w-9 h-9 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 transition-all cursor-pointer"
-                        >
-                          <ChevronRight className="w-5.5 h-5.5 stroke-[2.5]" />
-                        </button>
-                      </div>
-
-                      {/* Bio line banner */}
-                      {loggedInUser?.bio && (
-                        <div className="px-4 py-0.5">
-                          <p className="text-[11px] text-slate-500 font-medium bg-white/45 border border-white/60 backdrop-blur-xs px-3 py-1.5 rounded-xl inline-block max-w-[95%] truncate">
-                            ✨ {loggedInUser.bio}
-                          </p>
-                        </div>
-                      )}
-
-                      {/* 2. Stats row matching screenshot */}
-                      <div className="mx-4 bg-white rounded-2xl py-3 px-1 shadow-[0_4px_16px_rgba(0,0,0,0.02)] border border-slate-100/50 grid grid-cols-4 text-center select-none">
-                        <div>
-                          <span className="block text-base font-extrabold text-slate-800 leading-none">0</span>
-                          <span className="text-[10px] text-[#8e8a9c] font-semibold mt-1 block">Follow</span>
-                        </div>
-                        <div className="text-slate-200">|</div>
-                        <div>
-                          <span className="block text-base font-extrabold text-slate-800 leading-none">0</span>
-                          <span className="text-[10px] text-[#8e8a9c] font-semibold mt-1 block">Fans</span>
-                        </div>
-                        <div className="text-slate-200">|</div>
-                        <div>
-                          <span className="block text-base font-extrabold text-slate-800 leading-none">0</span>
-                          <span className="text-[10px] text-[#8e8a9c] font-semibold mt-1 block">Sent</span>
-                        </div>
-                        <div className="text-slate-200">|</div>
-                        <div>
-                          <span className="block text-base font-extrabold text-slate-800 leading-none">0</span>
-                          <span className="text-[10px] text-[#8e8a9c] font-semibold mt-1 block">Received</span>
-                        </div>
-                      </div>
-
-                      {/* 3. Wallet card matching screenshot */}
-                      <div className="mx-4 bg-white rounded-2xl p-4 shadow-[0_4px_16px_rgba(0,0,0,0.02)] border border-slate-100/50 space-y-4">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs font-black text-slate-800">Wallet</span>
-                            <span className="bg-gradient-to-r from-pink-500 to-rose-500 text-white text-[8px] font-extrabold px-2 py-0.5 rounded-full select-none animate-pulse">
-                              RECHARGE REWARDS
-                            </span>
-                          </div>
-                          <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600">
-                            <span>🪙 {userCoins.toLocaleString()}</span>
-                            <span className="text-slate-200">|</span>
-                            <span>💎 0</span>
-                            <ChevronRight className="w-4 h-4 text-slate-400" />
-                          </div>
-                        </div>
-
-                        {/* Dual boxes VIP & Premium */}
-                        <div className="grid grid-cols-2 gap-3 pt-0.5">
-                          {/* VIP card */}
-                          <div 
-                            onClick={() => {
-                              setSelectedVipLevel(vipLevel > 0 ? vipLevel : 1);
-                              setShowVipPage(true);
-                            }}
-                            className="bg-gradient-to-br from-[#f5ebd8] to-[#eae0cd] rounded-xl p-3 flex items-center justify-between border border-[#e2d6bf] cursor-pointer transition-all active:scale-98 hover:brightness-98"
-                          >
-                            <div>
-                              <span className="block text-xs font-black text-[#5c4314]">VIP</span>
-                              <span className="block text-[9px] text-[#8c6d32] font-extrabold mt-0.5">My Level:{vipLevel}</span>
-                            </div>
-                            <div className="w-8 h-8 rounded-full bg-gradient-to-b from-amber-200 to-amber-500 border border-amber-300 flex items-center justify-center shadow-sm select-none">
-                              <span className="text-white font-serif font-black italic text-[11px]">V</span>
-                            </div>
-                          </div>
-
-                          {/* Premium card */}
-                          <div className="bg-gradient-to-br from-[#fdf2d5] to-[#fbe6af] rounded-xl p-3 flex items-center justify-between border border-[#edd89e]">
-                            <div>
-                              <span className="block text-xs font-black text-[#5c4a14]">Premium</span>
-                              <span className="block text-[9px] text-[#8c7432] font-extrabold mt-0.5">Go to open &gt;&gt;</span>
-                            </div>
-                            <span className="text-lg filter drop-shadow-sm select-none leading-none">👑</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* 4. Grid of Options (8 items) */}
-                      <div className="mx-4 bg-white rounded-2xl p-4 shadow-[0_4px_16px_rgba(0,0,0,0.02)] border border-slate-100/50 grid grid-cols-4 gap-y-4 gap-x-2 select-none">
-                        {[
-                          { title: "Wealth", icon: <Star className="w-5.5 h-5.5" />, bg: "bg-[#fff2e3] text-[#ff8e26]" },
-                          { title: "Charm", icon: <Heart className="w-5.5 h-5.5" />, bg: "bg-[#ffebf7] text-[#ff68cf]" },
-                          { title: "Lucky", icon: <Sparkles className="w-5.5 h-5.5" />, bg: "bg-[#e3fbf2] text-[#21cf8c]" },
-                          { title: "Medal", icon: <Award className="w-5.5 h-5.5" />, bg: "bg-[#f1eaff] text-[#8b57ff]" },
-                          { title: "Task", icon: <Calendar className="w-5.5 h-5.5" />, bg: "bg-[#fff5e2] text-[#ffaa15]", badge: true },
-                          { title: "Mall", icon: <ShoppingBag className="w-5.5 h-5.5" />, bg: "bg-[#ffebee] text-[#ff4f72]" },
-                          { title: "Backpack", icon: <Gift className="w-5.5 h-5.5" />, bg: "bg-[#fff9dd] text-[#ffc616]" },
-                          { title: "Decorations", icon: <Shirt className="w-5.5 h-5.5" />, bg: "bg-[#e6f4ff] text-[#299dff]" },
-                        ].map((item) => (
-                          <div
-                            key={item.title}
-                            onClick={() => {
-                              if (item.title === "Task") setShowCheckInModal(true);
-                              else triggerToast(`${item.title} is fully integrated! Enjoy premium access.`, "success");
-                            }}
-                            className="flex flex-col items-center justify-center cursor-pointer group"
-                          >
-                            <div className={`w-11 h-11 rounded-2xl flex items-center justify-center ${item.bg} relative transition-all active:scale-95 group-hover:brightness-98 shadow-xs`}>
-                              {item.icon}
-                              {item.badge && (
-                                <span className="absolute top-0 right-0 w-2 h-2 bg-rose-500 rounded-full border border-white" />
-                              )}
-                            </div>
-                            <span className="text-[10px] text-slate-600 font-bold tracking-tight mt-1.5 group-hover:text-slate-800 transition-colors">
-                              {item.title}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* 5. Benefits Block */}
-                      <div className="mx-4 bg-white rounded-2xl overflow-hidden shadow-[0_4px_16px_rgba(0,0,0,0.02)] border border-slate-100/50 divide-y divide-slate-50">
-                        {/* Exciting Benefits Row */}
-                        <div
-                          onClick={() => triggerToast("Premium dynamic benefit catalog is loading!", "success")}
-                          className="flex items-center justify-between p-3.5 hover:bg-slate-50 transition-colors cursor-pointer"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-orange-50 text-orange-500 flex items-center justify-center">
-                              <Gift className="w-4.5 h-4.5" />
-                            </div>
-                            <span className="text-xs font-black text-slate-800">Exciting Benefits</span>
-                          </div>
-                          <ChevronRight className="w-4 h-4 text-slate-300" />
-                        </div>
-
-                        {/* OneR Affiliate Row with Yellow Commission Bubble */}
-                        <div className="p-3.5">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-lg bg-pink-50 text-pink-500 flex items-center justify-center">
-                                <User className="w-4.5 h-4.5" />
+                                <img
+                                  src={loggedInUser?.avatar || DEFAULT_AVATARS[0]}
+                                  alt={loggedInUser?.name}
+                                  className="w-full h-full object-cover rounded-full"
+                                />
+                                <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center rounded-full">
+                                  <Camera className="w-5 h-5 text-white" />
+                                </div>
                               </div>
-                              <span className="text-xs font-black text-slate-800">OneR Affiliate</span>
+
+                              {/* Edit Pencil Icon Button */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  profilePhotoInputRef.current?.click();
+                                }}
+                                className="absolute -bottom-1 -right-1 w-7 h-7 rounded-full bg-white text-slate-800 border border-slate-200/90 shadow-md flex items-center justify-center cursor-pointer hover:bg-slate-50 active:scale-90 transition-all z-10"
+                                title="Change photo in real-time"
+                              >
+                                <Edit3 className="w-3.5 h-3.5 text-slate-700" />
+                              </button>
                             </div>
-                            <span className="bg-amber-50 border border-amber-200/50 text-amber-700 text-[9px] font-black px-2 py-0.5 rounded flex items-center gap-1 leading-none select-none">
-                              🪙 Recharge Commission
+
+                            {/* User Name, ID, Flag, Bio & Badges */}
+                            <div className="min-w-0 flex-1">
+                              {/* Name & Quick Edit */}
+                              <div className="flex items-center gap-2">
+                                <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight truncate">
+                                  {loggedInUser?.name || "Md Munna"}
+                                </h2>
+                                <button
+                                  onClick={openEditProfile}
+                                  className="p-1 text-slate-500 hover:text-slate-900 transition-colors cursor-pointer"
+                                  title="Edit Profile Info"
+                                >
+                                  <Edit3 className="w-4 h-4" />
+                                </button>
+                              </div>
+
+                              {/* User ID Code (Copyable) & Country Flag */}
+                              <div className="flex items-center gap-2 flex-wrap mt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const idCode = loggedInUser?.idNo || (loggedInUser?.id && !loggedInUser.id.startsWith("user-") ? loggedInUser.id.replace(/\D/g, "") : "1488500") || "1488500";
+                                    navigator.clipboard.writeText(idCode);
+                                    triggerToast(`ID Code Copied: ${idCode} 📋`, "success");
+                                  }}
+                                  className="bg-white/80 hover:bg-white text-slate-900 text-xs font-black px-2.5 py-0.5 rounded-full flex items-center gap-1.5 cursor-pointer active:scale-95 transition-all shadow-2xs border border-slate-200/80"
+                                  title="Click to copy your ID Code"
+                                >
+                                  <span className="text-slate-400 font-extrabold text-[10px]">ID</span>
+                                  <span>{loggedInUser?.idNo || (loggedInUser?.id && !loggedInUser.id.startsWith("user-") ? loggedInUser.id.replace(/\D/g, "") : "1488500") || "1488500"}</span>
+                                  <Copy className="w-3 h-3 text-slate-500" />
+                                </button>
+
+                                <div className="bg-white/80 text-slate-800 text-xs font-extrabold px-2.5 py-0.5 rounded-full flex items-center gap-1 border border-slate-200/80 shadow-2xs">
+                                  <span className="text-sm">{loggedInUser?.countryFlag || "🇧🇩"}</span>
+                                  <span className="text-[11px] font-bold text-slate-700">{loggedInUser?.country || "Bangladesh"}</span>
+                                </div>
+                              </div>
+
+                              {/* Real-time Bio / About Slogan */}
+                              <div
+                                onClick={openEditProfile}
+                                className="mt-1.5 flex items-center gap-1.5 text-xs font-bold text-slate-700 bg-white/60 hover:bg-white px-2.5 py-1 rounded-xl cursor-pointer transition-all border border-slate-200/60 shadow-2xs"
+                                title="Click to update your Bio in real-time"
+                              >
+                                <span className="text-amber-500">💬</span>
+                                <span className="truncate italic max-w-[180px] sm:max-w-[240px]">
+                                  {loggedInUser?.bio || "Live your life to the fullest 🚀"}
+                                </span>
+                                <Edit3 className="w-3 h-3 text-slate-400 shrink-0 ml-auto" />
+                              </div>
+
+                              {/* ID Level, SVIP, Rewards Badges */}
+                              <div className="flex items-center flex-wrap gap-1.5 mt-2">
+                                <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-amber-400/20 text-amber-900 border border-amber-300/80 shadow-2xs">
+                                  ID Lv.{loggedInUser?.vipLevel ? loggedInUser.vipLevel * 4 : 12}
+                                </span>
+                                <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-purple-500/20 text-purple-900 border border-purple-300/80 shadow-2xs">
+                                  SVIP {loggedInUser?.vipLevel || 1}
+                                </span>
+                                <span className="text-[10px] font-black px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-900 border border-emerald-300/80 shadow-2xs">
+                                  👑 Rewards
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Right Side: CP Partner Circular Profile Logo */}
+                          <div
+                            onClick={() => setFullProfileUser(cpPartner)}
+                            className="relative cursor-pointer group flex flex-col items-center shrink-0 pt-1"
+                            title={`View Couple Partner Profile (${cpPartner.name})`}
+                          >
+                            <div className="w-12 h-12 rounded-full p-0.5 bg-gradient-to-tr from-rose-400 via-pink-500 to-rose-600 shadow-md group-hover:scale-110 active:scale-95 transition-transform overflow-hidden">
+                              <img
+                                src={cpPartner.avatar}
+                                alt={cpPartner.name}
+                                className="w-full h-full object-cover rounded-full border border-white"
+                              />
+                            </div>
+                            <span className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full bg-rose-500 text-white text-[10px] flex items-center justify-center border-2 border-white shadow-xs">
+                              💖
+                            </span>
+                            <span className="text-[9px] font-extrabold text-slate-700 mt-1 max-w-[62px] truncate text-center">
+                              CP
                             </span>
                           </div>
 
-                          <div className="mt-2.5 pl-11">
-                            <div
-                              onClick={() => triggerToast("Your custom invite referral link is copied!", "success")}
-                              className="bg-[#fef9c3] text-[#854d0e] text-[10px] font-bold py-1.5 px-3 rounded-xl flex items-center justify-between shadow-xs border border-yellow-200/50 cursor-pointer hover:bg-yellow-100/80 transition-all active:scale-[0.99]"
-                            >
-                              <span>Invite friends, earn a big commission!</span>
-                              <ChevronRight className="w-3.5 h-3.5 stroke-[2.5]" />
-                            </div>
+                        </div>
+
+                        {/* Real-time Metrics Row (Matching Screenshot) */}
+                        <div className="flex items-center gap-8 pt-2 px-1">
+                          <div 
+                            onClick={() => triggerToast(`Followers: ${Object.keys(followedUserIds).length}`, "info")}
+                            className="cursor-pointer group text-left"
+                          >
+                            <span className="block text-xl font-black text-slate-900 leading-none">
+                              {Object.keys(followedUserIds).length}
+                            </span>
+                            <span className="text-xs font-bold text-slate-600 mt-1 block">
+                              Followers
+                            </span>
+                          </div>
+
+                          <div 
+                            onClick={() => triggerToast(`Following: ${Object.values(followedUserIds).filter(Boolean).length}`, "info")}
+                            className="cursor-pointer group text-left"
+                          >
+                            <span className="block text-xl font-black text-slate-900 leading-none">
+                              {Object.values(followedUserIds).filter(Boolean).length}
+                            </span>
+                            <span className="text-xs font-bold text-slate-600 mt-1 block">
+                              Following
+                            </span>
+                          </div>
+
+                          <div 
+                            onClick={() => triggerToast("Visitors: 0", "info")}
+                            className="cursor-pointer group text-left"
+                          >
+                            <span className="block text-xl font-black text-slate-900 leading-none">
+                              0
+                            </span>
+                            <span className="text-xs font-bold text-slate-600 mt-1 block">
+                              Visitors
+                            </span>
                           </div>
                         </div>
 
-                        {/* Join Us Row */}
-                        <div
-                          onClick={() => triggerToast("Agency partner signup is online! Redirecting...", "success")}
-                          className="flex items-center justify-between p-3.5 hover:bg-slate-50 transition-colors cursor-pointer"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-500 flex items-center justify-center">
-                              <span className="text-sm select-none leading-none">🚩</span>
-                            </div>
-                            <span className="text-xs font-black text-slate-800">Join Us</span>
-                          </div>
-                          <ChevronRight className="w-4 h-4 text-slate-300" />
-                        </div>
                       </div>
 
-                      {/* 6. Languages and Settings Block */}
-                      <div className="mx-4 bg-white rounded-2xl overflow-hidden shadow-[0_4px_16px_rgba(0,0,0,0.02)] border border-slate-100/50 divide-y divide-slate-50">
-                        {/* Language Selector */}
+                      {/* White Rounded Container with Main Options */}
+                      <div className="bg-white rounded-t-[32px] pt-3 pb-8 px-4 shadow-xl space-y-1 min-h-[480px]">
+                        
+                        {/* 1. Wallet */}
                         <div
-                          onClick={() => triggerToast("English translation is active.", "success")}
-                          className="flex items-center justify-between p-3.5 hover:bg-slate-50 transition-colors cursor-pointer"
+                          onClick={() => {
+                            triggerToast(`Wallet Balance: 🪙 ${userCoins.toLocaleString()}`, "info");
+                          }}
+                          className="flex items-center justify-between p-3.5 hover:bg-slate-50 rounded-2xl transition-colors cursor-pointer group"
                         >
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-sky-50 text-sky-500 flex items-center justify-center">
-                              <Globe className="w-4.5 h-4.5" />
+                          <div className="flex items-center gap-3.5">
+                            <div className="w-10 h-10 rounded-2xl bg-[#3ddcbf] text-white flex items-center justify-center shadow-xs">
+                              <Wallet className="w-5 h-5" />
                             </div>
-                            <span className="text-xs font-black text-slate-800">Language</span>
+                            <span className="text-sm font-extrabold text-slate-800">
+                              Wallet
+                            </span>
                           </div>
-                          <div className="flex items-center gap-1 text-[11px] text-slate-400 font-bold">
-                            <span>English</span>
-                            <ChevronRight className="w-4 h-4" />
+                          <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-slate-500 transition-colors" />
+                        </div>
+
+                        {/* 2. Invite Friends */}
+                        <div
+                          onClick={() => triggerToast("Referral link copied!", "success")}
+                          className="flex items-center justify-between p-3.5 hover:bg-slate-50 rounded-2xl transition-colors cursor-pointer group"
+                        >
+                          <div className="flex items-center gap-3.5">
+                            <div className="w-10 h-10 rounded-2xl bg-[#ffd242] text-white font-black flex items-center justify-center text-lg shadow-xs">
+                              H
+                            </div>
+                            <span className="text-sm font-extrabold text-slate-800">
+                              Invite Friends
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="bg-[#fffbeb] border border-amber-200 text-[#b45309] text-[10.5px] font-extrabold px-2.5 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
+                              🍿 Earn Coins
+                            </span>
+                            <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-slate-500 transition-colors" />
                           </div>
                         </div>
 
-                        {/* Feedback Row */}
+                        {/* 3. SVIP */}
                         <div
-                          onClick={() => triggerToast("Feedback portal is active! Contact support@potalive.com", "success")}
-                          className="flex items-center justify-between p-3.5 hover:bg-slate-50 transition-colors cursor-pointer"
+                          onClick={() => {
+                            setSelectedVipLevel(1);
+                            setShowVipPage(true);
+                          }}
+                          className="flex items-center justify-between p-3.5 hover:bg-slate-50 rounded-2xl transition-colors cursor-pointer group"
                         >
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-violet-50 text-violet-500 flex items-center justify-center">
-                              <MessageCircle className="w-4.5 h-4.5" />
+                          <div className="flex items-center gap-3.5">
+                            <div className="w-10 h-10 rounded-2xl bg-[#23272e] text-amber-400 flex items-center justify-center font-black text-xs shadow-xs border border-amber-500/20">
+                              SVIP
                             </div>
-                            <span className="text-xs font-black text-slate-800">Feedback</span>
+                            <span className="text-sm font-extrabold text-slate-800">
+                              SVIP
+                            </span>
                           </div>
-                          <ChevronRight className="w-4 h-4 text-slate-300" />
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs font-bold text-slate-400">
+                              Join Now &gt;
+                            </span>
+                          </div>
                         </div>
 
-                        {/* Settings / Profile Editor */}
+                        {/* 4. Medal */}
+                        <div
+                          onClick={() => triggerToast("Medals catalog is active!", "info")}
+                          className="flex items-center justify-between p-3.5 hover:bg-slate-50 rounded-2xl transition-colors cursor-pointer group"
+                        >
+                          <div className="flex items-center gap-3.5">
+                            <div className="w-10 h-10 rounded-2xl bg-[#3b82f6] text-white flex items-center justify-center shadow-xs">
+                              <Award className="w-5 h-5" />
+                            </div>
+                            <span className="text-sm font-extrabold text-slate-800">
+                              Medal
+                            </span>
+                          </div>
+                          <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-slate-500 transition-colors" />
+                        </div>
+
+                        {/* 5. Level */}
+                        <div
+                          onClick={() => {
+                            setSelectedVipLevel(vipLevel || 1);
+                            setShowVipPage(true);
+                          }}
+                          className="flex items-center justify-between p-3.5 hover:bg-slate-50 rounded-2xl transition-colors cursor-pointer group"
+                        >
+                          <div className="flex items-center gap-3.5">
+                            <div className="w-10 h-10 rounded-2xl bg-[#ff8f3d] text-white flex items-center justify-center shadow-xs">
+                              <Crown className="w-5 h-5" />
+                            </div>
+                            <span className="text-sm font-extrabold text-slate-800">
+                              Level
+                            </span>
+                          </div>
+                          <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-slate-500 transition-colors" />
+                        </div>
+
+                        {/* 6. CP/Friend */}
+                        <div
+                          onClick={() => triggerToast("CP/Friend space is active!", "info")}
+                          className="flex items-center justify-between p-3.5 hover:bg-slate-50 rounded-2xl transition-colors cursor-pointer group"
+                        >
+                          <div className="flex items-center gap-3.5">
+                            <div className="w-10 h-10 rounded-2xl bg-[#ff4d79] text-white flex items-center justify-center shadow-xs">
+                              <Heart className="w-5 h-5 fill-white" />
+                            </div>
+                            <span className="text-sm font-extrabold text-slate-800">
+                              CP/Friend
+                            </span>
+                          </div>
+                          <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-slate-500 transition-colors" />
+                        </div>
+
+                        {/* 7. Family */}
+                        <div
+                          onClick={() => triggerToast("Family clubs available!", "info")}
+                          className="flex items-center justify-between p-3.5 hover:bg-slate-50 rounded-2xl transition-colors cursor-pointer group"
+                        >
+                          <div className="flex items-center gap-3.5">
+                            <div className="w-10 h-10 rounded-2xl bg-[#ffa338] text-white flex items-center justify-center shadow-xs">
+                              <Users className="w-5 h-5" />
+                            </div>
+                            <span className="text-sm font-extrabold text-slate-800">
+                              Family
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <span className="text-xs font-bold text-slate-400">
+                              Join Now &gt;
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* 8. Store */}
+                        <div
+                          onClick={() => triggerToast("Store catalog active!", "info")}
+                          className="flex items-center justify-between p-3.5 hover:bg-slate-50 rounded-2xl transition-colors cursor-pointer group"
+                        >
+                          <div className="flex items-center gap-3.5">
+                            <div className="w-10 h-10 rounded-2xl bg-[#a855f7] text-white flex items-center justify-center shadow-xs">
+                              <ShoppingBag className="w-5 h-5" />
+                            </div>
+                            <span className="text-sm font-extrabold text-slate-800">
+                              Store
+                            </span>
+                          </div>
+                          <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-slate-500 transition-colors" />
+                        </div>
+
+                        {/* 9. My Items */}
+                        <div
+                          onClick={() => triggerToast("Backpack & items ready!", "info")}
+                          className="flex items-center justify-between p-3.5 hover:bg-slate-50 rounded-2xl transition-colors cursor-pointer group"
+                        >
+                          <div className="flex items-center gap-3.5">
+                            <div className="w-10 h-10 rounded-2xl bg-[#38bdf8] text-white flex items-center justify-center shadow-xs">
+                              <Shirt className="w-5 h-5" />
+                            </div>
+                            <span className="text-sm font-extrabold text-slate-800">
+                              My Items
+                            </span>
+                          </div>
+                          <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-slate-500 transition-colors" />
+                        </div>
+
+                        {/* Divider */}
+                        <div className="my-2 border-t border-slate-100" />
+
+                        {/* Settings */}
                         <div
                           onClick={openEditProfile}
-                          className="flex items-center justify-between p-3.5 hover:bg-slate-50 transition-colors cursor-pointer"
+                          className="flex items-center justify-between p-3.5 hover:bg-slate-50 rounded-2xl transition-colors cursor-pointer group"
                         >
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-slate-50 text-slate-600 flex items-center justify-center">
-                              <Settings className="w-4.5 h-4.5" />
+                          <div className="flex items-center gap-3.5">
+                            <div className="w-10 h-10 rounded-2xl bg-slate-100 text-slate-600 flex items-center justify-center shadow-xs">
+                              <Settings className="w-5 h-5" />
                             </div>
-                            <span className="text-xs font-black text-slate-800">Profile Settings</span>
+                            <span className="text-sm font-extrabold text-slate-800">
+                              Profile Settings
+                            </span>
                           </div>
-                          <ChevronRight className="w-4 h-4 text-slate-300" />
+                          <ChevronRight className="w-5 h-5 text-slate-300 group-hover:text-slate-500 transition-colors" />
                         </div>
 
                         {/* Sign Out */}
                         <div
                           onClick={handleLogout}
-                          className="flex items-center justify-between p-3.5 hover:bg-rose-50 text-rose-600 transition-colors cursor-pointer"
+                          className="flex items-center justify-between p-3.5 hover:bg-rose-50 rounded-2xl text-rose-600 transition-colors cursor-pointer group"
                         >
-                          <div className="flex items-center gap-3">
-                            <div className="w-8 h-8 rounded-lg bg-rose-50 flex items-center justify-center text-rose-500">
-                              <X className="w-4.5 h-4.5" />
+                          <div className="flex items-center gap-3.5">
+                            <div className="w-10 h-10 rounded-2xl bg-rose-50 text-rose-500 flex items-center justify-center shadow-xs">
+                              <X className="w-5 h-5" />
                             </div>
-                            <span className="text-xs font-black">Sign Out Session</span>
+                            <span className="text-sm font-extrabold">
+                              Sign Out Session
+                            </span>
                           </div>
-                          <ChevronRight className="w-4 h-4 text-rose-300" />
+                          <ChevronRight className="w-5 h-5 text-rose-300 group-hover:text-rose-500 transition-colors" />
                         </div>
+
                       </div>
 
                     </div>
@@ -8378,7 +8706,7 @@ export default function App() {
                                   {m.role === "Host" && <span className="text-[10px]" title="Host">🎙️</span>}
                                 </span>
                                 <span className="block text-[8px] text-slate-400 font-bold font-mono tracking-wide leading-none">
-                                  ID: {m.id.startsWith("user") ? "24708556" : "custom-" + Math.floor(Math.random() * 89999 + 10000)}
+                                  ID: {m.idNo || "24708556"}
                                 </span>
                               </div>
                             </div>
@@ -8712,7 +9040,7 @@ export default function App() {
                         {roomTheme === "star-host" ? "BA❤️.ji🖤.ↄ" : (activeRoom?.title || "My Premium Lounge")}
                       </h4>
                       <span className="text-[9px] font-mono font-bold text-slate-400 tracking-wider">
-                        ID: {roomTheme === "star-host" ? "24708556" : (activeRoom?.id ? activeRoom.id.slice(0, 10).replace("room-", "") : "4032271")}
+                        ID: {activeRoom?.idNo || "24708556"}
                       </span>
                     </div>
                     {isFollowingRoom ? (
@@ -11022,7 +11350,7 @@ export default function App() {
                     LIVE
                   </span>
                   <span className="text-[8px] font-mono text-slate-400">
-                    ID:{minimizedRoom.id?.replace("room-custom-", "").slice(0, 8)}
+                    ID:{minimizedRoom.idNo || "24708556"}
                   </span>
                 </div>
                 <h4 className="text-xs font-black text-white truncate leading-tight mt-0.5">
@@ -11412,6 +11740,21 @@ export default function App() {
           setSelectedProfileUser(null);
           setActiveDirectChatUser(u);
         }}
+        onOpenFullProfile={(u) => {
+          setSelectedProfileUser(null);
+          setFullProfileUser({
+            id: u.id,
+            name: u.name,
+            avatar: u.avatar,
+            coverPhoto: (u as any).coverPhoto,
+            bio: u.bio,
+            idNo: u.idNo,
+            vipLevel: u.vipLevel,
+            followersCount: u.followersCount,
+            giftsCount: u.giftsCount,
+            intimacy: u.intimacy,
+          });
+        }}
         onReportUser={(u) => {
           triggerToast(`Report submitted for ${u.name} to room moderators.`, "success");
         }}
@@ -11421,6 +11764,50 @@ export default function App() {
         onToggleMuteSeat={(seatType, gridIndex) => executeToggleMuteSeat(seatType, gridIndex)}
         isSeatMuted={activeSeatConfig ? !!seatMutes[getSeatKey(activeSeatConfig.seatType, activeSeatConfig.gridIndex)] : false}
       />
+
+      {/* FULL DETAILED USER PROFILE MODAL (PRO PROFILE VIEW) */}
+      {fullProfileUser && (
+        <FullUserProfileModal
+          user={fullProfileUser}
+          loggedInUserId={loggedInUser?.id || "user-current"}
+          onClose={() => setFullProfileUser(null)}
+          onFollowToggle={(u) => {
+            const isCurrentlyFollowing = !!followedUserIds[u.id];
+            const nextState = !isCurrentlyFollowing;
+            setFollowedUserIds((prev) => ({ ...prev, [u.id]: nextState }));
+            triggerToast(nextState ? `You followed ${u.name}! ❤️` : `Unfollowed ${u.name}`, nextState ? "success" : "info");
+          }}
+          isFollowing={fullProfileUser ? !!followedUserIds[fullProfileUser.id] : false}
+          onGiveGift={(u) => {
+            setFullProfileUser(null);
+            setShowRoomGiftingModal(true);
+            triggerToast(`Select a gift for ${u.name} 🎁`, "info");
+          }}
+          onOpenDirectChat={(u) => {
+            setFullProfileUser(null);
+            setActiveDirectChatUser(u as any);
+          }}
+          onSaveProfileUpdate={async (updatedData) => {
+            if (loggedInUser) {
+              const updated: UserProfile = {
+                ...loggedInUser,
+                ...updatedData,
+              };
+              setLoggedInUser(updated);
+              localStorage.setItem("voxaclub_current_user", JSON.stringify(updated));
+              if (auth.currentUser) {
+                try {
+                  await setDoc(doc(db, "users", auth.currentUser.uid), updatedData, { merge: true });
+                } catch (err) {
+                  console.warn("Firestore profile sync error", err);
+                }
+              }
+              setFullProfileUser(prev => prev ? { ...prev, ...updatedData } : null);
+            }
+          }}
+          triggerToast={triggerToast}
+        />
+      )}
 
       {/* REAL-TIME 1-ON-1 DIRECT CHAT & AUDIO/VIDEO CALL MODAL */}
       {activeDirectChatUser && (
@@ -11908,6 +12295,46 @@ export default function App() {
           </div>
         )}
 
+        {/* DELETE CHAT CONFIRMATION MODAL */}
+        {chatToDelete && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              className="bg-white rounded-3xl p-6 w-full max-w-sm shadow-2xl border border-slate-100 space-y-4 text-center select-none"
+            >
+              <div className="w-12 h-12 rounded-full bg-rose-100 text-rose-600 mx-auto flex items-center justify-center font-bold">
+                <Trash2 className="w-6 h-6 stroke-[2.2]" />
+              </div>
+              <div>
+                <h3 className="text-base font-extrabold text-slate-900">Delete Conversation?</h3>
+                <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                  Are you sure you want to delete <span className="font-bold text-slate-800">"{chatToDelete.name}"</span> from your chat list?
+                </p>
+              </div>
+              <div className="flex items-center gap-2 pt-2">
+                <button
+                  onClick={() => setChatToDelete(null)}
+                  className="flex-1 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition-all cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={() => {
+                    setDeletedChatIds((prev) => ({ ...prev, [chatToDelete.id]: true }));
+                    triggerToast(`Deleted "${chatToDelete.name}" from your chat list`, "info");
+                    setChatToDelete(null);
+                  }}
+                  className="flex-1 py-2.5 bg-rose-500 hover:bg-rose-600 text-white font-extrabold text-xs rounded-xl transition-all shadow-md cursor-pointer"
+                >
+                  Delete Chat
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
         {/* 5. NOTICE MODAL */}
         {socialModal === "notice" && (
           <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4">
@@ -12084,13 +12511,16 @@ export default function App() {
                   </div>
                   <button
                     onClick={() => {
-                      setFriendRequests(prev => [...prev, {
-                        id: `req-${Date.now()}`,
-                        name: "Riya_VIP",
-                        avatar: DEFAULT_AVATARS[2],
-                        country: "🇮🇳",
-                        idNo: "4712039"
-                      }]);
+                      setFriendRequests((prev) => [
+                        ...prev,
+                        {
+                          id: `req-${Date.now()}`,
+                          name: "Riya_VIP",
+                          avatar: DEFAULT_AVATARS[2],
+                          country: "🇮🇳",
+                          idNo: "4712039",
+                        },
+                      ]);
                       triggerToast("Friend request sent to Riya_VIP!", "success");
                     }}
                     className="px-3 py-1 bg-amber-400 hover:bg-amber-500 text-slate-900 text-xs font-bold rounded-full cursor-pointer transition-all"
@@ -12106,6 +12536,15 @@ export default function App() {
         {/* 8. FULL-SCREEN MESSENGER DIRECT CHAT INTERFACE */}
         {activeSocialChatUser && (
           <div className="fixed inset-0 z-50 bg-[#edf1f7] flex flex-col h-full w-full select-none shadow-2xl">
+            {/* Hidden File Input for Real-Time Chat Photo Upload */}
+            <input
+              type="file"
+              ref={chatPhotoInputRef}
+              className="hidden"
+              accept="image/*"
+              onChange={handleChatPhotoUpload}
+            />
+
             {/* Header: Messenger Style Top Bar */}
             <div className="bg-white border-b border-slate-200/90 px-4 py-3 flex items-center justify-between shrink-0 shadow-xs z-10">
               <div className="flex items-center gap-3 min-w-0">
@@ -12133,14 +12572,13 @@ export default function App() {
                   </h3>
                   <p className="text-[11px] text-emerald-600 font-extrabold tracking-wide flex items-center gap-1">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    ID: {activeSocialChatUser.idNo} • Online
+                    ID: {activeSocialChatUser.idNo} • {activeSocialChatUser.online ? "Online now" : "Offline"}
                   </p>
                 </div>
               </div>
 
-              {/* Right Side Options: 1. Audio Call, 2. Video Call, 3. Report */}
+              {/* Right Side Options: Audio Call, Video Call, Report */}
               <div className="flex items-center gap-1.5 shrink-0">
-                {/* 1. Audio Call */}
                 <button
                   onClick={() => {
                     setIsVideoOff(false);
@@ -12153,20 +12591,6 @@ export default function App() {
                       isIncoming: false,
                       callId,
                     });
-                    try {
-                      const bc = new BroadcastChannel("voxaclub_realtime_calls");
-                      bc.postMessage({
-                        type: "INCOMING_CALL",
-                        callId,
-                        mode: "audio",
-                        callerId: loggedInUser.id,
-                        callerName: loggedInUser.name,
-                        callerAvatar: loggedInUser.avatar,
-                        callerIdNo: loggedInUser.idNo,
-                        receiverId: activeSocialChatUser.idNo,
-                      });
-                      bc.close();
-                    } catch (e) {}
                   }}
                   className="p-2.5 rounded-full bg-blue-50 hover:bg-blue-100 text-[#0084ff] transition-all cursor-pointer shadow-2xs active:scale-95"
                   title="Audio Call"
@@ -12174,7 +12598,6 @@ export default function App() {
                   <Phone className="w-5 h-5 stroke-[2.5]" />
                 </button>
 
-                {/* 2. Video Call */}
                 <button
                   onClick={() => {
                     setIsVideoOff(false);
@@ -12187,20 +12610,6 @@ export default function App() {
                       isIncoming: false,
                       callId,
                     });
-                    try {
-                      const bc = new BroadcastChannel("voxaclub_realtime_calls");
-                      bc.postMessage({
-                        type: "INCOMING_CALL",
-                        callId,
-                        mode: "video",
-                        callerId: loggedInUser.id,
-                        callerName: loggedInUser.name,
-                        callerAvatar: loggedInUser.avatar,
-                        callerIdNo: loggedInUser.idNo,
-                        receiverId: activeSocialChatUser.idNo,
-                      });
-                      bc.close();
-                    } catch (e) {}
                   }}
                   className="p-2.5 rounded-full bg-blue-50 hover:bg-blue-100 text-[#0084ff] transition-all cursor-pointer shadow-2xs active:scale-95"
                   title="Video Call"
@@ -12208,7 +12617,6 @@ export default function App() {
                   <Video className="w-5 h-5 stroke-[2.5]" />
                 </button>
 
-                {/* 3. Report */}
                 <button
                   onClick={() => setShowReportModal(true)}
                   className="p-2.5 rounded-full bg-rose-50 hover:bg-rose-100 text-rose-500 transition-all cursor-pointer shadow-2xs"
@@ -12219,41 +12627,111 @@ export default function App() {
               </div>
             </div>
 
-            {/* Chat Body Log with High Contrast & Messenger Design */}
-            <div className="flex-1 overflow-y-auto p-4 space-y-3.5 bg-[#f0f2f5] min-h-0">
+            {/* Chat Body Log */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[#f0f2f5] min-h-0">
               {activeSocialChatMessages.map((msg, idx) => (
                 <div
-                  key={msg.id || `msg-${idx}`}
+                  key={`${msg.id || 'msg'}-${idx}`}
                   className={`flex flex-col ${msg.sender === "user" ? "items-end" : "items-start"}`}
                 >
+                  {/* Quoted Mention/Reply Header if present */}
+                  {msg.replyTo && (
+                    <div className="max-w-[82%] mb-1 px-3 py-1.5 rounded-xl bg-slate-200/80 border-l-4 border-[#0084ff] text-xs font-semibold text-slate-800 shadow-2xs">
+                      <span className="text-[10px] font-black text-[#0084ff] block uppercase">
+                        Replying to {msg.replyTo.senderName}
+                      </span>
+                      <p className="line-clamp-1 text-slate-700">{msg.replyTo.text}</p>
+                    </div>
+                  )}
+
+                  {/* Message Content Bubble (Click to open menu options) */}
                   <div
-                    className={`max-w-[82%] px-4 py-2.5 rounded-2xl text-sm font-extrabold leading-relaxed shadow-xs ${
+                    onClick={() => setSelectedMsgForMenu(msg)}
+                    className={`max-w-[82%] px-4 py-2.5 rounded-2xl text-sm font-extrabold leading-relaxed shadow-xs cursor-pointer hover:opacity-95 active:scale-98 transition-all ${
                       msg.sender === "user"
                         ? "bg-[#0084ff] text-white rounded-tr-xs"
                         : "bg-white text-slate-900 border border-slate-200/90 rounded-tl-xs shadow-2xs"
                     }`}
                   >
-                    {msg.text}
+                    {/* Render Image Attachment */}
+                    {msg.type === "image" && msg.imageUrl && (
+                      <div className="mb-1.5 overflow-hidden rounded-xl border border-white/20 shadow-xs">
+                        <img
+                          src={msg.imageUrl}
+                          alt="Attachment"
+                          className="w-full max-h-60 object-cover rounded-xl"
+                        />
+                      </div>
+                    )}
+
+                    {/* Render Voice Attachment */}
+                    {msg.type === "voice" && (
+                      <div className="flex items-center gap-3 py-1 px-1">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            triggerToast("Playing voice audio... 🔊", "info");
+                          }}
+                          className={`w-9 h-9 rounded-full flex items-center justify-center shadow-xs ${
+                            msg.sender === "user" ? "bg-white text-[#0084ff]" : "bg-[#0084ff] text-white"
+                          }`}
+                        >
+                          <Volume2 className="w-5 h-5" />
+                        </button>
+                        <div className="flex gap-1 items-center h-5 min-w-[100px]">
+                          {[40, 75, 30, 90, 60, 85, 40, 70, 50, 80].map((h, i) => (
+                            <span
+                              key={i}
+                              className={`w-1 rounded-full ${msg.sender === "user" ? "bg-white" : "bg-slate-700"}`}
+                              style={{ height: `${h}%` }}
+                            />
+                          ))}
+                        </div>
+                        <span className="text-[11px] font-mono font-bold opacity-90">
+                          {msg.audioDuration || "0:05"}
+                        </span>
+                      </div>
+                    )}
+
+                    {/* Message Text */}
+                    {msg.text && <p>{msg.text}</p>}
                   </div>
-                  <div className="flex items-center gap-1 mt-1 px-1">
-                    <span className="text-[10px] text-slate-500 font-extrabold">
+
+                  {/* Timestamp & Real Status Indicators */}
+                  <div className="flex items-center gap-1.5 mt-1 px-1">
+                    <span className="text-[10px] text-slate-500 font-bold">
                       {msg.time}
                     </span>
                     {msg.sender === "user" && (
-                      <span className="inline-flex items-center ml-0.5">
-                        {msg.status === "sending" && (
-                          <Clock className="w-3 h-3 text-slate-400 animate-spin" title="Sending..." />
-                        )}
+                      <div className="flex items-center ml-1">
+                        {/* Sent Status */}
                         {msg.status === "sent" && (
-                          <Check className="w-3.5 h-3.5 text-slate-400" title="Sent" />
+                          <span className="text-[10px] font-extrabold text-slate-500 bg-slate-200/80 px-1.5 py-0.2 rounded-full">
+                            sent
+                          </span>
                         )}
+
+                        {/* Delivered Status */}
                         {msg.status === "delivered" && (
-                          <CheckCheck className="w-3.5 h-3.5 text-slate-400" title="Delivered" />
+                          <span className="text-[10px] font-extrabold text-slate-500 bg-slate-200/80 px-1.5 py-0.2 rounded-full">
+                            delivered
+                          </span>
                         )}
+
+                        {/* Seen Status - Recipient Avatar Logo */}
                         {msg.status === "seen" && (
-                          <CheckCheck className="w-3.5 h-3.5 text-sky-500 font-bold" title="Seen" />
+                          <div className="flex items-center gap-1">
+                            <span className="text-[9px] font-extrabold text-sky-600">Seen</span>
+                            <img
+                              src={activeSocialChatUser.avatar}
+                              alt="Seen logo"
+                              className="w-4 h-4 rounded-full object-cover border border-sky-400 shadow-2xs"
+                              title={`Seen by ${activeSocialChatUser.name}`}
+                            />
+                          </div>
                         )}
-                      </span>
+                      </div>
                     )}
                   </div>
                 </div>
@@ -12262,14 +12740,38 @@ export default function App() {
 
             {/* Real-Time Partner Typing Indicator */}
             {isPartnerTyping && (
-              <div className="flex items-center gap-2 px-5 py-2 bg-white/90 backdrop-blur-xs border-t border-slate-100 text-xs text-slate-600 font-bold shadow-xs">
-                <span className="w-2 h-2 rounded-full bg-[#0084ff] animate-ping" />
+              <div className="flex items-center gap-2 px-4 py-2 bg-white border-t border-slate-200 text-xs text-slate-700 font-bold shadow-xs">
+                <img
+                  src={activeSocialChatUser.avatar}
+                  alt={activeSocialChatUser.name}
+                  className="w-5 h-5 rounded-full object-cover border border-slate-300"
+                />
                 <span>{activeSocialChatUser.name} is typing...</span>
                 <div className="flex items-center gap-1 ml-1">
                   <span className="w-1.5 h-1.5 bg-[#0084ff] rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
                   <span className="w-1.5 h-1.5 bg-[#0084ff] rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
                   <span className="w-1.5 h-1.5 bg-[#0084ff] rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
                 </div>
+              </div>
+            )}
+
+            {/* Quoted Mention/Reply Input Bar Overlay */}
+            {replyingToMsg && (
+              <div className="bg-slate-100 border-t border-slate-200/80 px-4 py-2 flex items-center justify-between text-xs text-slate-800 shrink-0">
+                <div className="flex items-center gap-2 truncate min-w-0">
+                  <span className="font-extrabold text-[#0084ff] shrink-0">
+                    Replying to {replyingToMsg.senderName}:
+                  </span>
+                  <span className="truncate text-slate-600 italic">"{replyingToMsg.text}"</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setReplyingToMsg(null)}
+                  className="p-1 hover:bg-slate-200 rounded-full text-slate-500 cursor-pointer shrink-0"
+                  title="Cancel reply"
+                >
+                  <X className="w-4 h-4" />
+                </button>
               </div>
             )}
 
@@ -12282,90 +12784,186 @@ export default function App() {
                 const msgId = `msg-${Date.now()}`;
                 const timeStr = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-                // 1. Instantly append user message with 'sending' status
-                setActiveSocialChatMessages((prev) => [
-                  ...prev,
-                  { id: msgId, sender: "user", text: txt, time: timeStr, status: "sending" },
-                ]);
+                // Real status based on active target online state
+                const initialStatus = activeSocialChatUser.online ? "delivered" : "sent";
+
+                const newMsg = {
+                  id: msgId,
+                  sender: "user" as const,
+                  text: txt,
+                  type: "text" as const,
+                  time: timeStr,
+                  status: initialStatus as "sent" | "delivered" | "seen",
+                  replyTo: replyingToMsg ? { ...replyingToMsg } : undefined
+                };
+
+                setActiveSocialChatMessages((prev) => [...prev, newMsg]);
                 setNewChatInput("");
+                setReplyingToMsg(null);
 
-                // 2. Transition status: sending -> sent (400ms)
-                setTimeout(() => {
-                  setActiveSocialChatMessages((prev) =>
-                    prev.map((m) => (m.id === msgId ? { ...m, status: "sent" } : m))
-                  );
-                }, 400);
-
-                // 3. Transition status: sent -> delivered (800ms)
-                setTimeout(() => {
-                  setActiveSocialChatMessages((prev) =>
-                    prev.map((m) => (m.id === msgId ? { ...m, status: "delivered" } : m))
-                  );
-                }, 800);
-
-                // 4. Transition status: delivered -> seen (1300ms)
+                // Transition to seen status when target reads it
                 setTimeout(() => {
                   setActiveSocialChatMessages((prev) =>
                     prev.map((m) => (m.id === msgId ? { ...m, status: "seen" } : m))
                   );
-                }, 1300);
+                }, 1200);
 
-                // 5. Trigger partner typing indicator (1800ms)
-                setTimeout(() => {
-                  setIsPartnerTyping(true);
-                }, 1800);
-
-                // 6. Partner sends reply message (3500ms)
-                setTimeout(() => {
-                  setIsPartnerTyping(false);
-                  const responses = [
-                    "I received your message! Thanks for texting me 😊",
-                    "Hey! I am online now, let's talk in the voice room or video call! 📹✨",
-                    "Got your message! How are you doing today? ❤️",
-                    "Awesome! Feel free to call or message me anytime 🎧"
-                  ];
-                  const replyText = responses[Math.floor(Math.random() * responses.length)];
-                  const replyTime = new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-
-                  setActiveSocialChatMessages((prev) => [
-                    ...prev,
-                    {
-                      id: `reply-${Date.now()}`,
-                      sender: "other",
-                      text: replyText,
-                      time: replyTime,
-                      status: "seen"
-                    },
-                  ]);
-                }, 3500);
+                // Broadcast message to other windows in real time
+                try {
+                  const bc = new BroadcastChannel("voxaclub_realtime_direct_messages");
+                  bc.postMessage({ type: "NEW_DIRECT_MSG", data: { targetId: activeSocialChatUser.idNo, msg: newMsg } });
+                  bc.close();
+                } catch (err) {}
               }}
               className="bg-white border-t border-slate-200/90 px-3 py-3 flex items-center gap-2 shrink-0 shadow-md z-10"
             >
+              {/* Photo Upload Attachment Button */}
               <button
                 type="button"
-                onClick={() => triggerToast("Gift window opened! Choose a gift 🎁", "info")}
-                className="p-2.5 bg-pink-50 hover:bg-pink-100 text-pink-600 rounded-full transition-all cursor-pointer font-bold shrink-0 text-xs"
-                title="Send Gift"
+                onClick={() => chatPhotoInputRef.current?.click()}
+                className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-full transition-all cursor-pointer font-bold shrink-0"
+                title="Send Photo"
               >
-                🎁 Gift
+                <Camera className="w-5 h-5 text-slate-700" />
               </button>
+
+              {/* Voice Message Recording Button */}
+              <button
+                type="button"
+                onClick={toggleVoiceRecording}
+                className={`p-2.5 rounded-full transition-all cursor-pointer font-bold shrink-0 flex items-center gap-1.5 ${
+                  isVoiceRecording
+                    ? "bg-rose-500 text-white animate-pulse"
+                    : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                }`}
+                title={isVoiceRecording ? "Stop & Send Voice Note" : "Record Voice Message"}
+              >
+                <Mic className="w-5 h-5" />
+                {isVoiceRecording && (
+                  <span className="text-xs font-mono font-bold pr-1">
+                    0:{voiceSecs.toString().padStart(2, "0")}
+                  </span>
+                )}
+              </button>
+
+              {/* Text Input Field */}
               <input
                 type="text"
                 value={newChatInput}
-                onChange={(e) => setNewChatInput(e.target.value)}
-                placeholder="Type a message..."
+                onChange={(e) => {
+                  setNewChatInput(e.target.value);
+                }}
+                placeholder={isVoiceRecording ? "Recording voice note..." : "Type a message..."}
+                disabled={isVoiceRecording}
                 className="flex-1 bg-slate-100 border border-slate-200 rounded-full px-4 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-[#0084ff]"
               />
+
+              {/* Send Button */}
               <button
                 type="submit"
-                disabled={!newChatInput.trim()}
+                disabled={!newChatInput.trim() || isVoiceRecording}
                 className="p-2.5 bg-[#0084ff] hover:bg-[#0073e6] disabled:bg-slate-200 text-white rounded-full transition-all cursor-pointer font-bold shrink-0 shadow-md"
               >
                 <Send className="w-4 h-4" />
               </button>
             </form>
           </div>
-    )}
+        )}
+
+        {/* MESSAGE OPTIONS ACTION SHEET MODAL */}
+        {selectedMsgForMenu && (
+          <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-end sm:items-center justify-center p-0 sm:p-4 select-none">
+            <motion.div
+              initial={{ y: 100, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 100, opacity: 0 }}
+              className="bg-white rounded-t-3xl sm:rounded-3xl p-5 w-full max-w-sm shadow-2xl border border-slate-100 space-y-4 text-slate-900"
+            >
+              <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                <h4 className="text-sm font-extrabold text-slate-900">Message Options</h4>
+                <button
+                  onClick={() => setSelectedMsgForMenu(null)}
+                  className="p-1 rounded-full hover:bg-slate-100 text-slate-400"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Selected Message Preview */}
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 text-xs font-semibold text-slate-700 italic">
+                "{selectedMsgForMenu.text}"
+              </div>
+
+              {/* Action Buttons */}
+              <div className="space-y-2">
+                {/* 1. Reply / Mention */}
+                <button
+                  onClick={() => {
+                    setReplyingToMsg({
+                      id: selectedMsgForMenu.id,
+                      senderName: selectedMsgForMenu.sender === "user" ? "You" : (activeSocialChatUser?.name || "Friend"),
+                      text: selectedMsgForMenu.text
+                    });
+                    setSelectedMsgForMenu(null);
+                    triggerToast("Reply mode active! Type your response 💬", "info");
+                  }}
+                  className="w-full py-2.5 px-4 bg-slate-100 hover:bg-blue-50 hover:text-[#0084ff] text-slate-800 font-bold text-xs rounded-xl flex items-center gap-3 transition-colors cursor-pointer"
+                >
+                  <MessageSquare className="w-4 h-4 text-[#0084ff]" />
+                  <span>Reply / Mention Message</span>
+                </button>
+
+                {/* 2. Delete for Everyone (Unsend) */}
+                <button
+                  onClick={() => {
+                    const msgId = selectedMsgForMenu.id;
+                    setActiveSocialChatMessages((prev) => prev.filter((m) => m.id !== msgId));
+                    try {
+                      const bc = new BroadcastChannel("voxaclub_realtime_direct_messages");
+                      bc.postMessage({ type: "DELETE_MSG_EVERYONE", data: { msgId } });
+                      bc.close();
+                    } catch (e) {}
+                    setSelectedMsgForMenu(null);
+                    triggerToast("Message deleted for everyone 🗑️", "info");
+                  }}
+                  className="w-full py-2.5 px-4 bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-xs rounded-xl flex items-center gap-3 transition-colors cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4 text-rose-500" />
+                  <span>Delete for Everyone</span>
+                </button>
+
+                {/* 3. Delete for Me */}
+                <button
+                  onClick={() => {
+                    const msgId = selectedMsgForMenu.id;
+                    setActiveSocialChatMessages((prev) => prev.filter((m) => m.id !== msgId));
+                    setSelectedMsgForMenu(null);
+                    triggerToast("Message deleted for you", "info");
+                  }}
+                  className="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl flex items-center gap-3 transition-colors cursor-pointer"
+                >
+                  <X className="w-4 h-4 text-slate-500" />
+                  <span>Delete for Me</span>
+                </button>
+
+                {/* 4. Copy Text */}
+                <button
+                  onClick={() => {
+                    if (selectedMsgForMenu.text) {
+                      navigator.clipboard.writeText(selectedMsgForMenu.text);
+                      triggerToast("Copied to clipboard!", "success");
+                    }
+                    setSelectedMsgForMenu(null);
+                  }}
+                  className="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl flex items-center gap-3 transition-colors cursor-pointer"
+                >
+                  <Send className="w-4 h-4 text-slate-500" />
+                  <span>Copy Text</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
 
     {/* REAL-TIME AUDIO & VIDEO CALL FULL-SCREEN OVERLAY */}
     {activeSocialCall && (

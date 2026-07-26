@@ -39,12 +39,35 @@ export function createAgoraRtcService(): AgoraRtcService {
     },
     join: async (channelName, token, onUserPublished, onUserUnpublished) => {
       try {
+        // If already connected or connecting, leave first to reset connection state safely
+        if (client.connectionState === "CONNECTED" || client.connectionState === "CONNECTING") {
+          try {
+            if (localAudioTrack) {
+              localAudioTrack.stop();
+              localAudioTrack.close();
+              localAudioTrack = null;
+            }
+            await client.leave();
+          } catch (leaveErr) {
+            console.warn("[Agora] RTC leave before join handled:", leaveErr);
+          }
+        }
+
+        // Clean up existing listeners to prevent duplicate event callbacks
+        client.removeAllListeners("user-published");
+        client.removeAllListeners("user-unpublished");
+        client.removeAllListeners("user-left");
+
         // Register connection and subscription callbacks
         client.on("user-published", async (user, mediaType) => {
-          await client.subscribe(user, mediaType);
-          if (mediaType === "audio") {
-            user.audioTrack?.play();
-            onUserPublished(user, mediaType);
+          try {
+            await client.subscribe(user, mediaType);
+            if (mediaType === "audio") {
+              user.audioTrack?.play();
+              onUserPublished(user, mediaType);
+            }
+          } catch (subErr) {
+            console.warn("[Agora] Subscribe error handled:", subErr);
           }
         });
 
@@ -65,7 +88,17 @@ export function createAgoraRtcService(): AgoraRtcService {
         // Join the channel with the secure dynamic token fetched from Express server
         await client.join(AGORA_APP_ID, channelName, token, null);
         console.log(`Agora RTC successfully joined channel: ${channelName} with token`);
-      } catch (err) {
+      } catch (err: any) {
+        if (
+          err?.code === "OPERATION_ABORTED" ||
+          err?.name === "AgoraRTCError" ||
+          err?.message?.includes("OPERATION_ABORTED") ||
+          err?.message?.includes("cancel token") ||
+          err?.message?.includes("canceled")
+        ) {
+          console.warn("[Agora] RTC join operation canceled or aborted safely:", err?.message || err);
+          return;
+        }
         console.error("Failed to join Agora RTC channel", err);
         throw err;
       }
@@ -77,9 +110,21 @@ export function createAgoraRtcService(): AgoraRtcService {
           localAudioTrack.close();
           localAudioTrack = null;
         }
-        await client.leave();
+        if (client.connectionState === "CONNECTED" || client.connectionState === "CONNECTING") {
+          await client.leave();
+        }
         console.log("Agora RTC left channel successfully");
-      } catch (err) {
+      } catch (err: any) {
+        if (
+          err?.code === "OPERATION_ABORTED" ||
+          err?.name === "AgoraRTCError" ||
+          err?.message?.includes("OPERATION_ABORTED") ||
+          err?.message?.includes("cancel token") ||
+          err?.message?.includes("canceled")
+        ) {
+          console.warn("[Agora] RTC leave operation canceled or aborted safely:", err?.message || err);
+          return;
+        }
         console.error("Error during Agora RTC leave", err);
       }
     },
